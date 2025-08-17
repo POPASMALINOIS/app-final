@@ -1,12 +1,14 @@
 name: Build Windows (WPF .NET 8)
 
 on:
-  workflow_dispatch: {}   # lo ejecutas a mano desde Actions
+  workflow_dispatch: {}   # lo lanzas manualmente desde Actions
 
 jobs:
   build-win:
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: true
 
     steps:
       - name: Checkout
@@ -17,11 +19,20 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      # (Opcional) Cache de paquetes NuGet para acelerar
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
       - name: Verify project exists
         shell: pwsh
         run: |
           if (-not (Test-Path "src/OperativaLogistica/OperativaLogistica.csproj")) {
-            Write-Error "No se encuentra src/OperativaLogistica/OperativaLogistica.csproj. Sube el proyecto descomprimido respetando la estructura."
+            Write-Error "❌ No se encuentra src/OperativaLogistica/OperativaLogistica.csproj. Revisa la estructura del repo."
           }
 
       - name: Restore
@@ -54,3 +65,4 @@ jobs:
         with:
           name: OperativaLogistica-win-x64
           path: OperativaLogistica-win-x64.zip
+
