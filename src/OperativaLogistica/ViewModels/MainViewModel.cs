@@ -1,164 +1,93 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using OperativaLogistica.Models;
+using Microsoft.Win32;
 using OperativaLogistica.Services;
 using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Windows.Data;
-using Microsoft.Win32;
+using System.IO;
+using System.Linq;
+using System.Timers;
 
 namespace OperativaLogistica.ViewModels
 {
     public partial class MainViewModel : ObservableObject
     {
-        private readonly DatabaseService _db = new();
+        public ObservableCollection<SessionViewModel> Sessions { get; } = new();
+        [ObservableProperty] private SessionViewModel? selectedSession;
 
-        public ObservableCollection<Operacion> Operaciones { get; } = new();
-
-        private ICollectionView? _view;
-        public ICollectionView View => _view ??= CollectionViewSource.GetDefaultView(Operaciones);
-
-        // Fecha seleccionada para la jornada
-        [ObservableProperty]
-        private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
-
-        // Wrapper para compatibilizar referencias antiguas a "Fecha"
-        public DateOnly Fecha
-        {
-            get => SelectedDate;
-            set => SelectedDate = value;
-        }
-
-        partial void OnSelectedDateChanged(DateOnly value) => LoadFromDb();
-
-        [ObservableProperty]
-        private string filterText = "";
-
-        partial void OnFilterTextChanged(string value) => View.Refresh();
+        private readonly Timer _autoTimer = new(180000); // 3 minutos
+        public ConfigService Config { get; } = ConfigService.LoadOrCreate();
 
         public MainViewModel()
         {
-            View.Filter = FilterPredicate;
-            LoadFromDb();
+            AppPaths.Ensure();
+            NewTab();
+            _autoTimer.Elapsed += (_, __) => SelectedSession?.AutoSave();
+            _autoTimer.Start();
         }
-
-        private bool FilterPredicate(object obj)
-        {
-            if (string.IsNullOrWhiteSpace(FilterText)) return true;
-            if (obj is not Operacion op) return false;
-            var q = FilterText.Trim().ToLowerInvariant();
-            return ($"{op.Transportista} {op.Matricula} {op.Muelle} {op.Estado} {op.Destino} {op.Llegada} {op.LlegadaReal} {op.SalidaReal} {op.SalidaTope} {op.Observaciones} {op.Incidencias}")
-                   .ToLowerInvariant().Contains(q);
-        }
-
-        // --------- COMANDOS ---------
 
         [RelayCommand]
-        private void NewDay()
+        private void NewTab()
         {
-            if (System.Windows.MessageBox.Show(
-                $"Vas a iniciar una jornada en blanco para {SelectedDate:dd/MM/yyyy}.\nSe borrarán las entradas existentes de ese día.\n\n¿Continuar?",
-                "Nueva jornada", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning) != System.Windows.MessageBoxResult.Yes)
-                return;
-
-            _db.DeleteByDate(SelectedDate);
-            Operaciones.Clear();
-            View.Refresh();
+            var s = new SessionViewModel();
+            Sessions.Add(s);
+            SelectedSession = s;
         }
+
+        [RelayCommand]
+        private void CloseTab()
+        {
+            if (SelectedSession == null) return;
+            var idx = Sessions.IndexOf(SelectedSession);
+            Sessions.Remove(SelectedSession);
+            if (Sessions.Count == 0) NewTab();
+            else SelectedSession = Sessions[Math.Max(0, idx - 1)];
+        }
+
+        [RelayCommand] private void NewDay() => SelectedSession?.Load(); // ya borra desde el menú específico si lo deseas
 
         [RelayCommand]
         private void Import()
         {
-            var dlg = new OpenFileDialog
-            {
-                Filter = "Ficheros CSV o Excel|*.csv;*.xlsx",
-                CheckFileExists = true,
-                Title = "Selecciona el fichero con la operativa"
-            };
+            if (SelectedSession == null) return;
+
+            var dlg = new OpenFileDialog { Filter = "CSV/Excel|*.csv;*.xlsx" };
             if (dlg.ShowDialog() == true)
             {
-                var path = dlg.FileName;
-                var list = path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
-                    ? ImportService.FromXlsx(path, SelectedDate)
-                    : ImportService.FromCsv(path, SelectedDate);
+                var list = dlg.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+                    ? ImportService.FromXlsx(dlg.FileName, SelectedSession.SelectedDate)
+                    : ImportService.FromCsv(dlg.FileName, SelectedSession.SelectedDate);
 
-                foreach (var op in list)
-                    _db.Upsert(op);
-
-                LoadFromDb();
-
-                System.Windows.MessageBox.Show(
-                    list.Count > 0
-                        ? $"Importación completada.\nFilas añadidas/actualizadas: {list.Count}"
-                        : "No se detectaron filas válidas.\nRevisa que la fila de cabecera tenga nombres de columnas reconocibles (transportista, matrícula, muelle, estado, destino, llegada, salida tope...).",
-                    "Importar operativa",
-                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                foreach (var op in list) SelectedSession.Operaciones.Add(op);
+                SelectedSession.SaveAll();
             }
         }
 
         [RelayCommand]
-        private void SaveDay()
+        private void ExportCsv()
         {
-            var pdf = PdfService.SaveDailyPdf(Operaciones, SelectedDate);
-            System.Windows.MessageBox.Show($"PDF guardado en:\n{pdf}", "Operativa",
-                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
-        }
-
-        // ✅ Ajuste robusto: aceptar object y castear a Operacion con seguridad
-        [RelayCommand]
-        private void MarkLlegada(object? parameter)
-        {
-            var op = parameter as Operacion;
-            if (op == null) return;
-            MarkTime(op, true);
+            if (SelectedSession == null) return;
+            var name = $"operativa_{SelectedSession.SelectedDate:yyyyMMdd}_{SelectedSession.SelectedLado}.csv";
+            var path = Path.Combine(AppPaths.Base, name);
+            using var sw = new StreamWriter(path, false, System.Text.Encoding.UTF8);
+            sw.WriteLine("Transportista,Matricula,Muelle,Estado,Destino,Llegada,LlegadaReal,SalidaReal,SalidaTope,Observaciones,Incidencias,Precinto,Lex,Fecha,Lado");
+            foreach (var op in SelectedSession.Operaciones)
+                sw.WriteLine($"\"{op.Transportista}\",\"{op.Matricula}\",\"{op.Muelle}\",\"{op.Estado}\",\"{op.Destino}\",\"{op.Llegada}\",\"{op.LlegadaReal}\",\"{op.SalidaReal}\",\"{op.SalidaTope}\",\"{op.Observaciones}\",\"{op.Incidencias}\",\"{op.Precinto}\",{(op.Lex ? 1 : 0)},\"{SelectedSession.SelectedDate:yyyy-MM-dd}\",\"{SelectedSession.SelectedLado}\"");
         }
 
         [RelayCommand]
-        private void MarkSalida(object? parameter)
+        private void SavePdf()
         {
-            var op = parameter as Operacion;
-            if (op == null) return;
-            MarkTime(op, false);
+            if (SelectedSession == null) return;
+            var pdf = PdfService.SaveDailyPdf(SelectedSession.Operaciones, SelectedSession.SelectedDate, SelectedSession.SelectedLado);
+            System.Windows.MessageBox.Show($"PDF guardado en:\n{pdf}", "PDF", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         }
 
-        // --------- AUXILIARES ---------
-
-        private void MarkTime(Operacion op, bool isLlegada)
+        [RelayCommand]
+        private void OpenMappingEditor()
         {
-            var now = DateTime.Now.ToString("HH:mm");
-            if (isLlegada)
-            {
-                if (!string.IsNullOrWhiteSpace(op.LlegadaReal))
-                {
-                    if (System.Windows.MessageBox.Show(
-                        $"La LLEGADA REAL ya es {op.LlegadaReal}. ¿Sobrescribir por {now}?",
-                        "Confirmar", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
-                        return;
-                }
-                op.LlegadaReal = now;
-            }
-            else
-            {
-                if (!string.IsNullOrWhiteSpace(op.SalidaReal))
-                {
-                    if (System.Windows.MessageBox.Show(
-                        $"La SALIDA REAL ya es {op.SalidaReal}. ¿Sobrescribir por {now}?",
-                        "Confirmar", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question) != System.Windows.MessageBoxResult.Yes)
-                        return;
-                }
-                op.SalidaReal = now;
-            }
-            _db.Upsert(op);
-            View.Refresh();
-        }
-
-        private void LoadFromDb()
-        {
-            Operaciones.Clear();
-            foreach (var op in _db.GetByDate(SelectedDate))
-                Operaciones.Add(op);
-            View.Refresh();
+            Config.SaveMapping(); // crea si no existe
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("notepad.exe", AppPaths.MappingJson) { UseShellExecute = true }); } catch { }
         }
     }
 }
