@@ -5,40 +5,42 @@
         Title="Operativa Logística"
         Height="720" Width="1200"
         WindowStartupLocation="CenterScreen">
-
-    <!-- DataContext con el ViewModel basado en CommunityToolkit.Mvvm -->
     <Window.DataContext>
         <vm:MainViewModel/>
     </Window.DataContext>
 
     <DockPanel>
-        <!-- Menú principal -->
+        <!-- Menú -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_Archivo">
-                <!-- ✅ NUEVA OPCIÓN: borra las entradas del día seleccionado -->
-                <MenuItem Header="_Nueva jornada (en blanco)"
-                          Command="{Binding NewDayCommand}"/>
-
+                <MenuItem Header="_Nueva jornada (en blanco)" Command="{Binding NewDayCommand}"/>
                 <Separator/>
-                <!-- Puedes añadir aquí otras opciones cuando tengas comandos (Importar, Guardar PDF, etc.) -->
-
+                <MenuItem Header="_Importar..." Command="{Binding ImportCommand}"/>
+                <Separator/>
+                <MenuItem Header="_Guardar jornada (PDF)" Command="{Binding SaveDayCommand}"/>
+                <Separator/>
                 <MenuItem Header="Salir" Click="Exit_Click"/>
             </MenuItem>
-
+            <MenuItem Header="_Ver">
+                <MenuItem Header="Hoy" Click="Today_Click"/>
+            </MenuItem>
             <MenuItem Header="_Ayuda">
                 <MenuItem Header="Acerca de" Click="About_Click"/>
             </MenuItem>
         </Menu>
 
-        <!-- Barra superior con fecha (el VM usa SelectedDate) -->
+        <!-- Barra superior -->
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="6">
             <Label Content="Fecha:" VerticalAlignment="Center"/>
             <DatePicker SelectedDate="{Binding SelectedDate, Mode=TwoWay}" />
+            <Label Content="Buscar:" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            <TextBox Width="280" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
         </StackPanel>
 
-        <!-- Tabla de operaciones (se pobla con Load()) -->
-        <DataGrid ItemsSource="{Binding Operaciones}"
+        <!-- Tabla -->
+        <DataGrid ItemsSource="{Binding View}"
                   Margin="6"
+                  AutoGenerateColumns="False"
                   IsReadOnly="False"
                   EnableRowVirtualization="True"
                   EnableColumnVirtualization="True"
@@ -46,10 +48,10 @@
                   ScrollViewer.VerticalScrollBarVisibility="Auto"
                   ScrollViewer.CanContentScroll="True"
                   HeadersVisibility="Column"
-                  GridLinesVisibility="Horizontal"
-                  AutoGenerateColumns="False">
+                  GridLinesVisibility="Horizontal">
 
             <DataGrid.Columns>
+                <!-- TRANSPORTISTA (larga) -->
                 <DataGridTextColumn Header="TRANSPORTISTA" Binding="{Binding Transportista}" Width="220">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
@@ -63,6 +65,7 @@
                 <DataGridTextColumn Header="MUELLE" Binding="{Binding Muelle}" Width="80"/>
                 <DataGridTextColumn Header="ESTADO" Binding="{Binding Estado}" Width="120"/>
 
+                <!-- DESTINO (larga) -->
                 <DataGridTextColumn Header="DESTINO" Binding="{Binding Destino}" Width="220">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
@@ -73,10 +76,38 @@
                 </DataGridTextColumn>
 
                 <DataGridTextColumn Header="LLEGADA" Binding="{Binding Llegada}" Width="80"/>
-                <DataGridTextColumn Header="LLEGADA REAL" Binding="{Binding LlegadaReal}" Width="100"/>
-                <DataGridTextColumn Header="SALIDA REAL" Binding="{Binding SalidaReal}" Width="100"/>
-                <DataGridTextColumn Header="SALIDA TOPE" Binding="{Binding SalidaTope}" Width="100"/>
 
+                <!-- LLEGADA REAL con botón -->
+                <DataGridTemplateColumn Header="LLEGADA REAL" Width="170">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding LlegadaReal}" Width="80" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <Button Content="⏱ Llegada"
+                                        Command="{Binding DataContext.MarkLlegadaCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- SALIDA REAL con botón -->
+                <DataGridTemplateColumn Header="SALIDA REAL" Width="170">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding SalidaReal}" Width="80" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <Button Content="⏱ Salida"
+                                        Command="{Binding DataContext.MarkSalidaCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTextColumn Header="SALIDA TOPE" Binding="{Binding SalidaTope}" Width="90"/>
+
+                <!-- OBSERVACIONES (larga) -->
                 <DataGridTextColumn Header="OBSERVACIONES" Binding="{Binding Observaciones}" Width="260">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
@@ -86,6 +117,7 @@
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
 
+                <!-- INCIDENCIAS (larga) -->
                 <DataGridTextColumn Header="INCIDENCIAS" Binding="{Binding Incidencias}" Width="220">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
