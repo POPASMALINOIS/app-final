@@ -73,4 +73,130 @@ namespace OperativaLogistica.Services
                 .OrderByDescending(x => x.Score)
                 .First().Row;
 
-            var headers = header
+            var headers = headerRow.Cells(1, ws.LastColumnUsed().ColumnNumber()).Select(c => c.GetString()).ToList();
+            var map = BuildIndex(headers);
+
+            var list = new List<Operacion>();
+            var lastRow = ws.LastRowUsed().RowNumber();
+
+            for (int r = headerRow.RowNumber() + 1; r <= lastRow; r++)
+            {
+                var row = ws.Row(r);
+                if (!row.CellsUsed().Any()) continue;
+
+                string Get(string key)
+                {
+                    if (!map.TryGetValue(key, out var i)) return "";
+                    var cell = row.Cell(i + 1); // headers 0-based → Excel 1-based
+                    if (cell.DataType == XLDataType.Number && (key == "LLEGADA" || key == "SALIDA TOPE"))
+                        return FromExcelTime(cell.GetDouble());
+                    return cell.GetString().Trim();
+                }
+
+                var op = new Operacion
+                {
+                    Transportista = Get("TRANSPORTISTA"),
+                    Matricula     = Get("MATRICULA"),
+                    Muelle        = Get("MUELLE"),
+                    Estado        = Get("ESTADO"),
+                    Destino       = Get("DESTINO"),
+                    Llegada       = NormalizeTime(Get("LLEGADA")),
+                    SalidaTope    = NormalizeTime(Get("SALIDA TOPE")),
+                    Observaciones = Get("OBSERVACIONES"),
+                    Incidencias   = Get("INCIDENCIAS"),
+                    Fecha         = fecha
+                };
+
+                if (!IsRowEmpty(op)) list.Add(op);
+            }
+            return list;
+        }
+
+        // --------- Utilidades ---------
+
+        private static IXLWorksheet PickWorksheet(XLWorkbook wb)
+        {
+            foreach (var ws in wb.Worksheets)
+                if (ws.FirstRowUsed() != null) return ws;
+            return wb.Worksheets.First();
+        }
+
+        private static Dictionary<string,int> BuildIndex(IReadOnlyList<string> headers)
+        {
+            var idx = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var normHeaders = headers.Select(Normalize).ToArray();
+
+            foreach (var target in Synonyms.Keys)
+            {
+                var wanted = Synonyms[target].Select(Normalize).ToArray();
+
+                for (int i = 0; i < normHeaders.Length; i++)
+                    if (wanted.Contains(normHeaders[i])) { idx[target] = i; goto next; }
+
+                for (int i = 0; i < normHeaders.Length; i++)
+                    if (wanted.Any(w => normHeaders[i].Contains(w))) { idx[target] = i; goto next; }
+
+                next:;
+            }
+            return idx;
+        }
+
+        private static string Normalize(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return "";
+            s = s.Trim().ToLowerInvariant();
+
+            // quitar tildes
+            var nf = s.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder();
+            foreach (var ch in nf)
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                    sb.Append(ch);
+            s = sb.ToString().Normalize(NormalizationForm.FormC);
+
+            // quitar no alfanuméricos
+            return new string(s.Where(char.IsLetterOrDigit).ToArray());
+        }
+
+        private static bool IsRowEmpty(Operacion op) =>
+            string.IsNullOrWhiteSpace(op.Transportista)
+            && string.IsNullOrWhiteSpace(op.Matricula)
+            && string.IsNullOrWhiteSpace(op.Destino);
+
+        private static string FromExcelTime(double excelNumber)
+        {
+            var ts = TimeSpan.FromDays(excelNumber); // fracción de día
+            if (ts.TotalHours < 0 || ts.TotalHours > 48) return "";
+            return new DateTime(1,1,1).Add(ts).ToString("HH:mm");
+        }
+
+        private static string[] SplitCsvLine(string line)
+        {
+            var list = new List<string>();
+            bool q = false; string cur = "";
+            foreach (var ch in line)
+            {
+                if (ch == '"') q = !q;
+                else if (ch == ',' && !q) { list.Add(cur.Trim()); cur = ""; }
+                else cur += ch;
+            }
+            list.Add(cur.Trim());
+            return list.ToArray();
+        }
+
+        private static string NormalizeTime(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "";
+            value = value.Trim().ToLowerInvariant().Replace("h", "").Replace(".", ":");
+            if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var num))
+                if (num < 24 && Math.Abs(num - Math.Truncate(num)) < 1e-6) return $"{(int)num:00}:00";
+
+            var parts = value.Split(':');
+            if (parts.Length == 1) return $"{parts[0].PadLeft(2,'0')}:00";
+            string hh = parts[0].PadLeft(2,'0');
+            string mm = parts[1].PadLeft(2,'0');
+            if (mm.Length > 2) mm = mm[..2];
+            return $"{hh}:{mm}";
+        }
+    }
+}
