@@ -23,7 +23,7 @@ namespace OperativaLogistica.ViewModels
         [ObservableProperty]
         private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
 
-        // ⚠️ Wrapper para compatibilizar referencias antiguas a "Fecha"
+        // Wrapper para compatibilizar referencias antiguas a "Fecha"
         public DateOnly Fecha
         {
             get => SelectedDate;
@@ -105,14 +105,27 @@ namespace OperativaLogistica.ViewModels
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         }
 
-        [RelayCommand] private void MarkLlegada(Operacion? op) => MarkTime(op, true);
-        [RelayCommand] private void MarkSalida(Operacion? op)  => MarkTime(op, false);
+        // ✅ Ajuste robusto: aceptar object y castear a Operacion con seguridad
+        [RelayCommand]
+        private void MarkLlegada(object? parameter)
+        {
+            var op = parameter as Operacion;
+            if (op == null) return;
+            MarkTime(op, true);
+        }
+
+        [RelayCommand]
+        private void MarkSalida(object? parameter)
+        {
+            var op = parameter as Operacion;
+            if (op == null) return;
+            MarkTime(op, false);
+        }
 
         // --------- AUXILIARES ---------
 
-        private void MarkTime(Operacion? op, bool isLlegada)
+        private void MarkTime(Operacion op, bool isLlegada)
         {
-            if (op == null) return;
             var now = DateTime.Now.ToString("HH:mm");
             if (isLlegada)
             {
