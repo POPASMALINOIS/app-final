@@ -11,7 +11,6 @@ namespace OperativaLogistica.Services
 {
     public static class ImportService
     {
-        // Sinónimos para mapear cabeceras "libres" a tus 11 categorías
         private static readonly Dictionary<string, string[]> Synonyms = new(StringComparer.OrdinalIgnoreCase)
         {
             ["TRANSPORTISTA"] = new[] { "transportista","carrier","empresa","proveedor","transport" },
@@ -64,33 +63,44 @@ namespace OperativaLogistica.Services
         {
             using var wb = new XLWorkbook(path);
             var ws = PickWorksheet(wb);
+            if (ws == null) return new();
 
-            // Detectar fila de cabecera (entre las 15 primeras filas)
-            var candidateRows = ws.Rows(1, Math.Min(15, ws.LastRowUsed()?.RowNumber() ?? 1));
+            var lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+            var lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
+            if (lastCol == 0 || lastRow == 0) return new();
+
+            // Detectar posible cabecera (entre las 15 primeras filas)
+            var candidateRows = ws.Rows(1, Math.Min(15, lastRow));
             var headerRow = candidateRows
-                .Select(r => new { Row = r, Score = r.Cells(1, ws.LastColumnUsed().ColumnNumber())
-                                            .Count(c => !string.IsNullOrWhiteSpace(c.GetString())) })
+                .Select(r => new
+                {
+                    Row = r,
+                    Score = r.Cells(1, lastCol).Count(c => !string.IsNullOrWhiteSpace(c.GetString()))
+                })
                 .OrderByDescending(x => x.Score)
                 .First().Row;
 
-            var headers = headerRow.Cells(1, ws.LastColumnUsed().ColumnNumber()).Select(c => c.GetString()).ToList();
+            var headers = headerRow.Cells(1, lastCol).Select(c => c.GetString()).ToList();
             var map = BuildIndex(headers);
 
             var list = new List<Operacion>();
-            var lastRow = ws.LastRowUsed().RowNumber();
 
             for (int r = headerRow.RowNumber() + 1; r <= lastRow; r++)
             {
                 var row = ws.Row(r);
-                if (!row.CellsUsed().Any()) continue;
+                if (row == null || !row.CellsUsed().Any()) continue;
 
                 string Get(string key)
                 {
                     if (!map.TryGetValue(key, out var i)) return "";
-                    var cell = row.Cell(i + 1); // headers 0-based → Excel 1-based
+                    var cell = row.Cell(i + 1);
+                    if (cell == null) return "";
                     if (cell.DataType == XLDataType.Number && (key == "LLEGADA" || key == "SALIDA TOPE"))
-                        return FromExcelTime(cell.GetDouble());
-                    return cell.GetString().Trim();
+                    {
+                        var d = cell.GetDouble();
+                        return FromExcelTime(d);
+                    }
+                    return cell.GetString()?.Trim() ?? "";
                 }
 
                 var op = new Operacion
@@ -114,14 +124,14 @@ namespace OperativaLogistica.Services
 
         // --------- Utilidades ---------
 
-        private static IXLWorksheet PickWorksheet(XLWorkbook wb)
+        private static IXLWorksheet? PickWorksheet(XLWorkbook wb)
         {
             foreach (var ws in wb.Worksheets)
-                if (ws.FirstRowUsed() != null) return ws;
-            return wb.Worksheets.First();
+                if (ws?.FirstRowUsed() != null) return ws;
+            return wb.Worksheets.FirstOrDefault();
         }
 
-        private static Dictionary<string,int> BuildIndex(IReadOnlyList<string> headers)
+        private static Dictionary<string, int> BuildIndex(IReadOnlyList<string> headers)
         {
             var idx = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var normHeaders = headers.Select(Normalize).ToArray();
@@ -167,7 +177,7 @@ namespace OperativaLogistica.Services
         {
             var ts = TimeSpan.FromDays(excelNumber); // fracción de día
             if (ts.TotalHours < 0 || ts.TotalHours > 48) return "";
-            return new DateTime(1,1,1).Add(ts).ToString("HH:mm");
+            return new DateTime(1, 1, 1).Add(ts).ToString("HH:mm");
         }
 
         private static string[] SplitCsvLine(string line)
@@ -192,9 +202,9 @@ namespace OperativaLogistica.Services
                 if (num < 24 && Math.Abs(num - Math.Truncate(num)) < 1e-6) return $"{(int)num:00}:00";
 
             var parts = value.Split(':');
-            if (parts.Length == 1) return $"{parts[0].PadLeft(2,'0')}:00";
-            string hh = parts[0].PadLeft(2,'0');
-            string mm = parts[1].PadLeft(2,'0');
+            if (parts.Length == 1) return $"{parts[0].PadLeft(2, '0')}:00";
+            string hh = parts[0].PadLeft(2, '0');
+            string mm = (parts.Length > 1 ? parts[1] : "00").PadLeft(2, '0');
             if (mm.Length > 2) mm = mm[..2];
             return $"{hh}:{mm}";
         }
