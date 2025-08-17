@@ -1,0 +1,68 @@
+
+<Window x:Class="OperativaLogistica.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:OperativaLogistica"
+        Title="Operativa Logística" Height="720" Width="1200" WindowStartupLocation="CenterScreen">
+    <Window.DataContext>
+        <local:MainViewModel/>
+    </Window.DataContext>
+    <DockPanel>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_Archivo">
+                <MenuItem Header="_Importar..." Command="{Binding ImportCommand}"/>
+                <Separator/>
+                <MenuItem Header="_Guardar jornada (PDF)" Command="{Binding SaveDayCommand}"/>
+                <Separator/>
+                <MenuItem Header="Salir" Click="Exit_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Ver">
+                <MenuItem Header="Hoy" Click="Today_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Ayuda">
+                <MenuItem Header="Acerca de" Click="About_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="6">
+            <Label Content="Fecha:" VerticalAlignment="Center"/>
+            <DatePicker SelectedDate="{Binding Fecha, Mode=TwoWay}" />
+            <Label Content="Buscar:" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            <TextBox Width="280" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
+        </StackPanel>
+
+        <DataGrid ItemsSource="{Binding View}" DockPanel.Dock="Bottom" Margin="6" IsReadOnly="False">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="TRANSPORTISTA" Binding="{Binding Transportista}" Width="*"/>
+                <DataGridTextColumn Header="MATRICULA" Binding="{Binding Matricula}" Width="120"/>
+                <DataGridTextColumn Header="MUELLE" Binding="{Binding Muelle}" Width="80"/>
+                <DataGridTextColumn Header="ESTADO" Binding="{Binding Estado}" Width="140"/>
+                <DataGridTextColumn Header="DESTINO" Binding="{Binding Destino}" Width="200"/>
+                <DataGridTextColumn Header="LLEGADA" Binding="{Binding Llegada}" Width="80"/>
+                <DataGridTemplateColumn Header="LLEGADA REAL" Width="160">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding LlegadaReal}" Width="80" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <Button Content="⏱ Llegada" Command="{Binding DataContext.MarkLlegadaCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="SALIDA REAL" Width="160">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding SalidaReal}" Width="80" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <Button Content="⏱ Salida" Command="{Binding DataContext.MarkSalidaCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="SALIDA TOPE" Binding="{Binding SalidaTope}" Width="90"/>
+                <DataGridTextColumn Header="OBSERVACIONES" Binding="{Binding Observaciones}" Width="200"/>
+                <DataGridTextColumn Header="INCIDENCIAS" Binding="{Binding Incidencias}" Width="160"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Window>
