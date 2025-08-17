@@ -2,9 +2,29 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:OperativaLogistica.ViewModels"
-        Title="Operativa Logística"
-        Height="720" Width="1200"
+        xmlns:conv="clr-namespace:OperativaLogistica.Converters"
+        Title="Operativa Logística" Height="750" Width="1300"
         WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <conv:RowStatusToBrushConverter x:Key="RowBrush"/>
+        <!-- Listas para combos -->
+        <x:Array x:Key="Estados" Type="{x:Type sys:String}" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+            <sys:String>CARGANDO</sys:String>
+            <sys:String>OK</sys:String>
+            <sys:String>ANULADO</sys:String>
+        </x:Array>
+        <x:Array x:Key="IncidenciasList" Type="{x:Type sys:String}" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+            <sys:String>RETRASO TRANSPORTISTA</sys:String>
+            <sys:String>RETRASO DOCUMENTACION</sys:String>
+            <sys:String>INCIDENCIA REMOLQUE</sys:String>
+            <sys:String>ANULADO</sys:String>
+        </x:Array>
+        <Style x:Key="IncidenciaRedText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFB71C1C"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Resources>
 
     <Window.DataContext>
         <vm:MainViewModel/>
@@ -14,116 +34,138 @@
         <!-- Menú -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_Archivo">
-                <MenuItem Header="_Nueva jornada (en blanco)" Command="{Binding NewDayCommand}"/>
+                <MenuItem Header="Nueva _pestaña" Command="{Binding NewTabCommand}"/>
+                <MenuItem Header="Cerrar pestaña" Command="{Binding CloseTabCommand}"/>
                 <Separator/>
                 <MenuItem Header="_Importar..." Command="{Binding ImportCommand}"/>
+                <MenuItem Header="Exportar _CSV" Command="{Binding ExportCsvCommand}"/>
+                <MenuItem Header="Guardar _PDF" Command="{Binding SavePdfCommand}"/>
                 <Separator/>
-                <MenuItem Header="_Guardar jornada (PDF)" Command="{Binding SaveDayCommand}"/>
+                <MenuItem Header="Editar _mapeo (mapping.json)" Command="{Binding OpenMappingEditorCommand}"/>
                 <Separator/>
                 <MenuItem Header="Salir" Click="Exit_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Ver">
-                <MenuItem Header="Hoy" Click="Today_Click"/>
             </MenuItem>
             <MenuItem Header="_Ayuda">
                 <MenuItem Header="Acerca de" Click="About_Click"/>
             </MenuItem>
         </Menu>
 
-        <!-- Barra superior -->
+        <!-- Cabecera -->
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="6">
             <Label Content="Fecha:" VerticalAlignment="Center"/>
-            <DatePicker SelectedDate="{Binding SelectedDate, Mode=TwoWay}" />
-            <Label Content="Buscar:" VerticalAlignment="Center" Margin="12,0,0,0"/>
-            <TextBox Width="280" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"/>
+            <DatePicker SelectedDate="{Binding SelectedSession.SelectedDate, Mode=TwoWay}"/>
+
+            <Label Content="Lado:" Margin="12,0,0,0" VerticalAlignment="Center"/>
+            <ComboBox Width="100" SelectedItem="{Binding SelectedSession.SelectedLado}">
+                <ComboBoxItem>LADO 0</ComboBoxItem><ComboBoxItem>LADO 1</ComboBoxItem><ComboBoxItem>LADO 2</ComboBoxItem>
+                <ComboBoxItem>LADO 3</ComboBoxItem><ComboBoxItem>LADO 4</ComboBoxItem><ComboBoxItem>LADO 5</ComboBoxItem>
+                <ComboBoxItem>LADO 6</ComboBoxItem><ComboBoxItem>LADO 7</ComboBoxItem><ComboBoxItem>LADO 8</ComboBoxItem>
+                <ComboBoxItem>LADO 9</ComboBoxItem>
+            </ComboBox>
+
+            <Label Content="Buscar:" Margin="12,0,0,0" VerticalAlignment="Center"/>
+            <TextBox Width="320" Text="{Binding SelectedSession.FilterText, UpdateSourceTrigger=PropertyChanged}"/>
         </StackPanel>
 
-        <!-- Tabla -->
-        <DataGrid ItemsSource="{Binding View}"
-                  Margin="6"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="False"
-                  EnableRowVirtualization="True"
-                  EnableColumnVirtualization="True"
-                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                  ScrollViewer.CanContentScroll="True"
-                  HeadersVisibility="Column"
-                  GridLinesVisibility="Horizontal">
+        <!-- Pestañas -->
+        <TabControl ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}">
+            <TabControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding SelectedDate}" />
+                </DataTemplate>
+            </TabControl.ItemTemplate>
 
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="TRANSPORTISTA" Binding="{Binding Transportista}" Width="220">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                            <Setter Property="ToolTip" Value="{Binding Transportista}"/>
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
+            <TabControl.ContentTemplate>
+                <DataTemplate DataType="{x:Type vm:SessionViewModel}">
+                    <Grid>
+                        <DataGrid x:Name="GridOps"
+                                  ItemsSource="{Binding View}"
+                                  Margin="6"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="False"
+                                  LoadingRow="DataGrid_LoadingRow"
+                                  AutoGeneratingColumn="DataGrid_AutoGeneratingColumn"
+                                  HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  RowBackground="{Binding ., Converter={StaticResource RowBrush}}"
+                                  AlternatingRowBackground="#08000000">
 
-                <DataGridTextColumn Header="MATRICULA" Binding="{Binding Matricula}" Width="120"/>
-                <DataGridTextColumn Header="MUELLE" Binding="{Binding Muelle}" Width="80"/>
-                <DataGridTextColumn Header="ESTADO" Binding="{Binding Estado}" Width="120"/>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="TRANSPORTISTA" Binding="{Binding Transportista}" Width="220"/>
+                                <DataGridTextColumn Header="MATRICULA" Binding="{Binding Matricula}" Width="120"/>
+                                <DataGridTextColumn Header="MUELLE" Binding="{Binding Muelle}" Width="80"/>
 
-                <DataGridTextColumn Header="DESTINO" Binding="{Binding Destino}" Width="220">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                            <Setter Property="ToolTip" Value="{Binding Destino}"/>
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
+                                <!-- ESTADO desplegable -->
+                                <DataGridComboBoxColumn Header="ESTADO" Width="120"
+                                    ItemsSource="{StaticResource Estados}" SelectedItemBinding="{Binding Estado, Mode=TwoWay}"/>
 
-                <DataGridTextColumn Header="LLEGADA" Binding="{Binding Llegada}" Width="80"/>
+                                <DataGridTextColumn Header="DESTINO" Binding="{Binding Destino}" Width="200"/>
+                                <DataGridTextColumn Header="LLEGADA" Binding="{Binding Llegada}" Width="80"/>
 
-                <!-- LLEGADA REAL con parámetro explícito -->
-                <DataGridTemplateColumn Header="LLEGADA REAL" Width="170">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding LlegadaReal}" Width="80" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <Button Content="⏱ Llegada"
-                                        Command="{Binding DataContext.MarkLlegadaCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding .}"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                                <!-- LLEGADA REAL -->
+                                <DataGridTemplateColumn Header="LLEGADA REAL" Width="160">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding LlegadaReal}" Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <Button Content="⏱" Width="32"
+                                                        Command="{Binding DataContext.MarkLlegadaCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                                        CommandParameter="{Binding .}"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
 
-                <!-- SALIDA REAL con parámetro explícito -->
-                <DataGridTemplateColumn Header="SALIDA REAL" Width="170">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding SalidaReal}" Width="80" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <Button Content="⏱ Salida"
-                                        Command="{Binding DataContext.MarkSalidaCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding .}"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                                <!-- SALIDA REAL -->
+                                <DataGridTemplateColumn Header="SALIDA REAL" Width="160">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding SalidaReal}" Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <Button Content="⏱" Width="32"
+                                                        Command="{Binding DataContext.MarkSalidaCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                                        CommandParameter="{Binding .}"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
 
-                <DataGridTextColumn Header="SALIDA TOPE" Binding="{Binding SalidaTope}" Width="90"/>
+                                <DataGridTextColumn Header="SALIDA TOPE" Binding="{Binding SalidaTope}" Width="90"/>
+                                <DataGridTextColumn Header="OBSERVACIONES" Binding="{Binding Observaciones}" Width="250"/>
 
-                <DataGridTextColumn Header="OBSERVACIONES" Binding="{Binding Observaciones}" Width="260">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                            <Setter Property="ToolTip" Value="{Binding Observaciones}"/>
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
+                                <!-- INCIDENCIAS desplegable (rojo) -->
+                                <DataGridComboBoxColumn Header="INCIDENCIAS" Width="220"
+                                    ItemsSource="{StaticResource IncidenciasList}" SelectedItemBinding="{Binding Incidencias, Mode=TwoWay}"/>
 
-                <DataGridTextColumn Header="INCIDENCIAS" Binding="{Binding Incidencias}" Width="220">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                            <Setter Property="ToolTip" Value="{Binding Incidencias}"/>
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+                                <!-- PRECINTO -->
+                                <DataGridTextColumn Header="PRECINTO" Binding="{Binding Precinto}" Width="120"/>
+
+                                <!-- LEX (tick) -->
+                                <DataGridCheckBoxColumn Header="LEX" Binding="{Binding Lex}" Width="60"/>
+
+                                <!-- Acciones -->
+                                <DataGridTemplateColumn Header="ACCIONES" Width="160">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Content="Duplicar"
+                                                        Command="{Binding DataContext.DuplicateRowCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                                        CommandParameter="{Binding .}" Margin="0,0,6,0"/>
+                                                <Button Content="Borrar"
+                                                        Command="{Binding DataContext.DeleteRowCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                                        CommandParameter="{Binding .}"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </DataTemplate>
+            </TabControl.ContentTemplate>
+        </TabControl>
     </DockPanel>
 </Window>
