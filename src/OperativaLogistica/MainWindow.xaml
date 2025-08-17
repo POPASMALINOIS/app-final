@@ -13,19 +13,16 @@
     <DockPanel>
         <!-- Menú -->
         <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_Archivo">
-                <MenuItem Header="_Importar..." Command="{Binding ImportCommand}"/>
-                <Separator/>
-                <MenuItem Header="_Guardar jornada (PDF)" Command="{Binding SaveDayCommand}"/>
-                <Separator/>
-                <MenuItem Header="Salir" Click="Exit_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Ver">
-                <MenuItem Header="Hoy" Click="Today_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Ayuda">
-                <MenuItem Header="Acerca de" Click="About_Click"/>
-            </MenuItem>
+           <MenuItem Header="_Archivo">
+    <MenuItem Header="_Nueva jornada (en blanco)" Command="{Binding NewDayCommand}"/>
+    <Separator/>
+    <MenuItem Header="_Importar..." Command="{Binding ImportCommand}"/>
+    <Separator/>
+    <MenuItem Header="_Guardar jornada (PDF)" Command="{Binding SaveDayCommand}"/>
+    <Separator/>
+    <MenuItem Header="Salir" Click="Exit_Click"/>
+</MenuItem>
+
         </Menu>
 
         <!-- Filtros -->
