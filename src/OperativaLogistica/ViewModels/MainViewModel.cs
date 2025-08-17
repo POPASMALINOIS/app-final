@@ -19,21 +19,23 @@ namespace OperativaLogistica.ViewModels
         private ICollectionView? _view;
         public ICollectionView View => _view ??= CollectionViewSource.GetDefaultView(Operaciones);
 
+        // Fecha seleccionada para la jornada
         [ObservableProperty]
         private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
 
-        partial void OnSelectedDateChanged(DateOnly value)
+        // ⚠️ Wrapper para compatibilizar referencias antiguas a "Fecha"
+        public DateOnly Fecha
         {
-            LoadFromDb();
+            get => SelectedDate;
+            set => SelectedDate = value;
         }
+
+        partial void OnSelectedDateChanged(DateOnly value) => LoadFromDb();
 
         [ObservableProperty]
         private string filterText = "";
 
-        partial void OnFilterTextChanged(string value)
-        {
-            View.Refresh();
-        }
+        partial void OnFilterTextChanged(string value) => View.Refresh();
 
         public MainViewModel()
         {
@@ -103,17 +105,8 @@ namespace OperativaLogistica.ViewModels
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         }
 
-        [RelayCommand]
-        private void MarkLlegada(Operacion? op)
-        {
-            MarkTime(op, isLlegada: true);
-        }
-
-        [RelayCommand]
-        private void MarkSalida(Operacion? op)
-        {
-            MarkTime(op, isLlegada: false);
-        }
+        [RelayCommand] private void MarkLlegada(Operacion? op) => MarkTime(op, true);
+        [RelayCommand] private void MarkSalida(Operacion? op)  => MarkTime(op, false);
 
         // --------- AUXILIARES ---------
 
