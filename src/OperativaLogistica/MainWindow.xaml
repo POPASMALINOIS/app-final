@@ -5,6 +5,7 @@
         Title="Operativa Logística"
         Height="720" Width="1200"
         WindowStartupLocation="CenterScreen">
+
     <Window.DataContext>
         <vm:MainViewModel/>
     </Window.DataContext>
@@ -51,7 +52,6 @@
                   GridLinesVisibility="Horizontal">
 
             <DataGrid.Columns>
-                <!-- TRANSPORTISTA (larga) -->
                 <DataGridTextColumn Header="TRANSPORTISTA" Binding="{Binding Transportista}" Width="220">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
@@ -65,7 +65,6 @@
                 <DataGridTextColumn Header="MUELLE" Binding="{Binding Muelle}" Width="80"/>
                 <DataGridTextColumn Header="ESTADO" Binding="{Binding Estado}" Width="120"/>
 
-                <!-- DESTINO (larga) -->
                 <DataGridTextColumn Header="DESTINO" Binding="{Binding Destino}" Width="220">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
@@ -77,7 +76,7 @@
 
                 <DataGridTextColumn Header="LLEGADA" Binding="{Binding Llegada}" Width="80"/>
 
-                <!-- LLEGADA REAL con botón -->
+                <!-- LLEGADA REAL con parámetro explícito -->
                 <DataGridTemplateColumn Header="LLEGADA REAL" Width="170">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
@@ -85,13 +84,13 @@
                                 <TextBlock Text="{Binding LlegadaReal}" Width="80" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                 <Button Content="⏱ Llegada"
                                         Command="{Binding DataContext.MarkLlegadaCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding}"/>
+                                        CommandParameter="{Binding .}"/>
                             </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <!-- SALIDA REAL con botón -->
+                <!-- SALIDA REAL con parámetro explícito -->
                 <DataGridTemplateColumn Header="SALIDA REAL" Width="170">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
@@ -99,7 +98,7 @@
                                 <TextBlock Text="{Binding SalidaReal}" Width="80" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                 <Button Content="⏱ Salida"
                                         Command="{Binding DataContext.MarkSalidaCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding}"/>
+                                        CommandParameter="{Binding .}"/>
                             </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -107,7 +106,6 @@
 
                 <DataGridTextColumn Header="SALIDA TOPE" Binding="{Binding SalidaTope}" Width="90"/>
 
-                <!-- OBSERVACIONES (larga) -->
                 <DataGridTextColumn Header="OBSERVACIONES" Binding="{Binding Observaciones}" Width="260">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
@@ -117,7 +115,6 @@
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
 
-                <!-- INCIDENCIAS (larga) -->
                 <DataGridTextColumn Header="INCIDENCIAS" Binding="{Binding Incidencias}" Width="220">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
