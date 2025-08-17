@@ -1,16 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
-<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
+
   <ItemGroup>
-  <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.6" />
-  <PackageReference Include="ClosedXML" Version="0.102.5" />
-  <PackageReference Include="QuestPDF" Version="2024.12.3" />
-  <!-- 🔽 Añadir este paquete para CommunityToolkit.Mvvm -->
-  <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
-</ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.6" />
+    <PackageReference Include="ClosedXML" Version="0.102.5" />
+    <PackageReference Include="QuestPDF" Version="2024.12.3" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+  </ItemGroup>
+
+</Project>
