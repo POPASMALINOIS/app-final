@@ -6,7 +6,8 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Timers;
+using Timer = System.Timers.Timer;   // ⬅️ Alias para evitar ambigüedad
+// using System.Threading;  // NO
 
 namespace OperativaLogistica.ViewModels
 {
@@ -15,7 +16,7 @@ namespace OperativaLogistica.ViewModels
         public ObservableCollection<SessionViewModel> Sessions { get; } = new();
         [ObservableProperty] private SessionViewModel? selectedSession;
 
-        private readonly Timer _autoTimer = new(180000); // 3 minutos
+        private readonly Timer _autoTimer = new(180000); // 3 min
         public ConfigService Config { get; } = ConfigService.LoadOrCreate();
 
         public MainViewModel()
@@ -44,7 +45,7 @@ namespace OperativaLogistica.ViewModels
             else SelectedSession = Sessions[Math.Max(0, idx - 1)];
         }
 
-        [RelayCommand] private void NewDay() => SelectedSession?.Load(); // ya borra desde el menú específico si lo deseas
+        [RelayCommand] private void NewDay() => SelectedSession?.Load();
 
         [RelayCommand]
         private void Import()
@@ -86,8 +87,13 @@ namespace OperativaLogistica.ViewModels
         [RelayCommand]
         private void OpenMappingEditor()
         {
-            Config.SaveMapping(); // crea si no existe
-            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("notepad.exe", AppPaths.MappingJson) { UseShellExecute = true }); } catch { }
+            Config.SaveMapping();
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("notepad.exe", AppPaths.MappingJson)
+                { UseShellExecute = true });
+            }
+            catch { }
         }
     }
 }
