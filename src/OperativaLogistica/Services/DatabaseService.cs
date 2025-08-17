@@ -13,8 +13,8 @@ namespace OperativaLogistica.Services
         public DatabaseService(string dbPath = "operativa.db")
         {
             _dbPath = dbPath;
-            if (!File.Exists(_dbPath))
-                Initialize();
+            if (!File.Exists(_dbPath)) Initialize();
+            EnsureMigrations(); // añade columnas nuevas si faltan
         }
 
         private void Initialize()
@@ -38,10 +38,41 @@ namespace OperativaLogistica.Services
                 Observaciones TEXT,
                 Incidencias TEXT,
                 LlegadaReal TEXT,
-                SalidaReal TEXT
+                SalidaReal TEXT,
+                Precinto TEXT,
+                Lex INTEGER DEFAULT 0
             );
             ";
             cmd.ExecuteNonQuery();
+        }
+
+        private void EnsureMigrations()
+        {
+            using var connection = new SqliteConnection($"Data Source={_dbPath}");
+            connection.Open();
+
+            bool HasColumn(string name)
+            {
+                using var pragma = connection.CreateCommand();
+                pragma.CommandText = "PRAGMA table_info(Operaciones);";
+                using var r = pragma.ExecuteReader();
+                while (r.Read())
+                {
+                    var col = r.GetString(1);
+                    if (string.Equals(col, name, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                return false;
+            }
+
+            void AddColumn(string sql)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = sql;
+                cmd.ExecuteNonQuery();
+            }
+
+            if (!HasColumn("Precinto")) AddColumn("ALTER TABLE Operaciones ADD COLUMN Precinto TEXT;");
+            if (!HasColumn("Lex"))      AddColumn("ALTER TABLE Operaciones ADD COLUMN Lex INTEGER DEFAULT 0;");
         }
 
         public List<Operacion> GetByDate(DateOnly date)
@@ -71,10 +102,11 @@ namespace OperativaLogistica.Services
                     Observaciones = reader.IsDBNull(9) ? "" : reader.GetString(9),
                     Incidencias = reader.IsDBNull(10) ? "" : reader.GetString(10),
                     LlegadaReal = reader.IsDBNull(11) ? "" : reader.GetString(11),
-                    SalidaReal = reader.IsDBNull(12) ? "" : reader.GetString(12)
+                    SalidaReal = reader.IsDBNull(12) ? "" : reader.GetString(12),
+                    Precinto = reader.IsDBNull(13) ? "" : reader.GetString(13),
+                    Lex = !reader.IsDBNull(14) && reader.GetInt32(14) == 1
                 });
             }
-
             return list;
         }
 
@@ -82,7 +114,6 @@ namespace OperativaLogistica.Services
         {
             using var connection = new SqliteConnection($"Data Source={_dbPath}");
             connection.Open();
-
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "DELETE FROM Operaciones WHERE Fecha=$f";
             cmd.Parameters.AddWithValue("$f", date.ToString("yyyy-MM-dd"));
@@ -101,8 +132,8 @@ namespace OperativaLogistica.Services
                 cmd.CommandText =
                 @"
                 INSERT INTO Operaciones 
-                (Fecha, Transportista, Matricula, Muelle, Estado, Destino, Llegada, SalidaTope, Observaciones, Incidencias, LlegadaReal, SalidaReal)
-                VALUES ($f,$t,$m,$mu,$e,$d,$l,$s,$o,$i,$lr,$sr);
+                (Fecha, Transportista, Matricula, Muelle, Estado, Destino, Llegada, SalidaTope, Observaciones, Incidencias, LlegadaReal, SalidaReal, Precinto, Lex)
+                VALUES ($f,$t,$m,$mu,$e,$d,$l,$s,$o,$i,$lr,$sr,$pr,$lex);
                 ";
             }
             else
@@ -112,7 +143,7 @@ namespace OperativaLogistica.Services
                 UPDATE Operaciones SET
                     Fecha=$f, Transportista=$t, Matricula=$m, Muelle=$mu, Estado=$e, Destino=$d,
                     Llegada=$l, SalidaTope=$s, Observaciones=$o, Incidencias=$i,
-                    LlegadaReal=$lr, SalidaReal=$sr
+                    LlegadaReal=$lr, SalidaReal=$sr, Precinto=$pr, Lex=$lex
                 WHERE Id=$id;
                 ";
                 cmd.Parameters.AddWithValue("$id", op.Id);
@@ -130,10 +161,11 @@ namespace OperativaLogistica.Services
             cmd.Parameters.AddWithValue("$i", op.Incidencias ?? "");
             cmd.Parameters.AddWithValue("$lr", op.LlegadaReal ?? "");
             cmd.Parameters.AddWithValue("$sr", op.SalidaReal ?? "");
+            cmd.Parameters.AddWithValue("$pr", op.Precinto ?? "");
+            cmd.Parameters.AddWithValue("$lex", op.Lex ? 1 : 0);
 
             cmd.ExecuteNonQuery();
 
-            // Obtener el último Id insertado en SQLite (sustituto de LastInsertRowId)
             if (op.Id == 0)
             {
                 using var lastCmd = connection.CreateCommand();
