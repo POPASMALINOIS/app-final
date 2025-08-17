@@ -37,7 +37,7 @@ namespace OperativaLogistica.Services
             {
                 container.Page(page =>
                 {
-                    page.Size(PageSizes.A4.Landscape);
+                    page.Size(PageSizes.A4.Landscape());
                     page.Margin(20);
 
                     page.Header()
