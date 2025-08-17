@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Windows.Controls;
 
 namespace OperativaLogistica.Services
@@ -9,11 +8,9 @@ namespace OperativaLogistica.Services
         {
             foreach (var col in grid.Columns)
             {
-                if (!string.IsNullOrEmpty(col.Header?.ToString()) &&
-                    cfg.ColumnWidths.TryGetValue(col.Header.ToString()!, out var w))
-                {
+                var key = col.Header?.ToString();
+                if (!string.IsNullOrEmpty(key) && cfg.ColumnWidths.TryGetValue(key!, out var w))
                     col.Width = w;
-                }
             }
         }
 
