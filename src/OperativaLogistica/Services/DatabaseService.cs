@@ -91,7 +91,16 @@ WHERE Id=$id";
             }
         }
         public List<Operacion> GetByDate(DateOnly date)
-        {
+        {public void DeleteByDate(DateOnly date)
+{
+    using var connection = new SqliteConnection($"Data Source={_dbPath}");
+    connection.Open();
+    var cmd = connection.CreateCommand();
+    cmd.CommandText = "DELETE FROM Operaciones WHERE Fecha=$f";
+    cmd.Parameters.AddWithValue("$f", date.ToString("yyyy-MM-dd"));
+    cmd.ExecuteNonQuery();
+}
+
             using var connection = new SqliteConnection($"Data Source={_dbPath}");
             connection.Open();
             var cmd = connection.CreateCommand();
