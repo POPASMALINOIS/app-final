@@ -31,56 +31,63 @@ namespace OperativaLogistica.Services
 
             QuestPDF.Settings.License = LicenseType.Community;
 
-            Document.Create(container =>
+           Document.Create(container =>
+{
+    container.Page(page =>
+    {
+        page.Size(QuestPDF.Helpers.PageSizes.A4.Landscape);
+        page.Margin(20);
+        page.Header()
+            .Text($"Operativa Logística - {date:dd/MM/yyyy}")
+            .SemiBold().FontSize(14);
+
+        page.Content().Table(table =>
+        {
+            var columns = new[]
             {
-                container.Page(page =>
-                {
-                    page.Margin(20);
-                    page.Header().Text($"Operativa Logística - {date:dd/MM/yyyy}").SemiBold().FontSize(16);
-                    page.Content().Table(table =>
-                    {
-                        var columns = new[]
-                        {
-                            "TRANSPORTISTA","MATRICULA","MUELLE","ESTADO","DESTINO",
-                            "LLEGADA","LLEGADA REAL","SALIDA REAL","SALIDA TOPE","OBSERVACIONES","INCIDENCIAS"
-                        };
-                        table.ColumnsDefinition(c =>
-                        {
-                            c.RelativeColumn(1);
-                            c.RelativeColumn(1);
-                            c.RelativeColumn(0.7f);
-                            c.RelativeColumn(0.8f);
-                            c.RelativeColumn(1.2f);
-                            c.RelativeColumn(0.8f);
-                            c.RelativeColumn(0.9f);
-                            c.RelativeColumn(0.9f);
-                            c.RelativeColumn(0.9f);
-                            c.RelativeColumn(1.2f);
-                            c.RelativeColumn(1.0f);
-                        });
-                        foreach (var h in columns)
-                            table.Header(c => c.Cell().Background(Colors.Grey.Lighten3).Padding(4).Text(h).SemiBold());
+                "TRANSPORTISTA","MATRICULA","MUELLE","ESTADO","DESTINO",
+                "LLEGADA","LLEGADA REAL","SALIDA REAL","SALIDA TOPE","OBSERVACIONES","INCIDENCIAS"
+            };
 
-                        foreach (var op in data)
-                        {
-                            table.Cell().Padding(3).Text(op.Transportista);
-                            table.Cell().Padding(3).Text(op.Matricula);
-                            table.Cell().Padding(3).Text(op.Muelle);
-                            table.Cell().Padding(3).Text(op.Estado);
-                            table.Cell().Padding(3).Text(op.Destino);
-                            table.Cell().Padding(3).Text(op.Llegada);
-                            table.Cell().Padding(3).Text(op.LlegadaReal ?? "");
-                            table.Cell().Padding(3).Text(op.SalidaReal ?? "");
-                            table.Cell().Padding(3).Text(op.SalidaTope);
-                            table.Cell().Padding(3).Text(op.Observaciones);
-                            table.Cell().Padding(3).Text(op.Incidencias);
-                        }
-                    });
-                    page.Footer().AlignRight().Text($"Generado: {DateTime.Now:dd/MM/yyyy HH:mm}");
-                });
-            }).GeneratePdf(path);
+            table.ColumnsDefinition(c =>
+            {
+                c.RelativeColumn(1.2f);  // TRANSPORTISTA
+                c.RelativeColumn(0.9f);  // MATRICULA
+                c.RelativeColumn(0.7f);  // MUELLE
+                c.RelativeColumn(0.9f);  // ESTADO
+                c.RelativeColumn(1.4f);  // DESTINO
+                c.RelativeColumn(0.8f);  // LLEGADA
+                c.RelativeColumn(1.0f);  // LLEGADA REAL
+                c.RelativeColumn(1.0f);  // SALIDA REAL
+                c.RelativeColumn(0.9f);  // SALIDA TOPE
+                c.RelativeColumn(1.4f);  // OBSERVACIONES
+                c.RelativeColumn(1.2f);  // INCIDENCIAS
+            });
 
-            return path;
-        }
-    }
-}
+            // Cabecera
+            table.Header(h =>
+            {
+                foreach (var t in columns)
+                    h.Cell().Background(Colors.Grey.Lighten3).Padding(4).Text(t).SemiBold().FontSize(9);
+            });
+
+            // Filas
+            foreach (var op in data)
+            {
+                table.Cell().Padding(3).Text(op.Transportista).FontSize(9);
+                table.Cell().Padding(3).Text(op.Matricula).FontSize(9);
+                table.Cell().Padding(3).Text(op.Muelle).FontSize(9);
+                table.Cell().Padding(3).Text(op.Estado).FontSize(9);
+                table.Cell().Padding(3).Text(op.Destino).FontSize(9);
+                table.Cell().Padding(3).Text(op.Llegada).FontSize(9);
+                table.Cell().Padding(3).Text(op.LlegadaReal ?? "").FontSize(9);
+                table.Cell().Padding(3).Text(op.SalidaReal ?? "").FontSize(9);
+                table.Cell().Padding(3).Text(op.SalidaTope).FontSize(9);
+                table.Cell().Padding(3).Text(op.Observaciones).FontSize(9);
+                table.Cell().Padding(3).Text(op.Incidencias).FontSize(9);
+            }
+        });
+
+        page.Footer().AlignRight().Text($"Generado: {DateTime.Now:dd/MM/yyyy HH:mm}").FontSize(9);
+    });
+}).GeneratePdf(path);
