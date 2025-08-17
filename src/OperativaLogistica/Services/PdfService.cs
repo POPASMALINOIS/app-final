@@ -16,7 +16,7 @@ namespace OperativaLogistica.Services
             var dir = Path.Combine(desktop, "Operativa_Historico");
             Directory.CreateDirectory(dir);
 
-            // Limpieza: borrar PDFs con más de 30 días
+            // 🔹 Borrar PDFs con más de 30 días
             foreach (var file in Directory.GetFiles(dir, "*.pdf"))
             {
                 try
@@ -25,7 +25,7 @@ namespace OperativaLogistica.Services
                     if (info.CreationTimeUtc < DateTime.UtcNow.AddDays(-30))
                         File.Delete(file);
                 }
-                catch { /* ignorar errores puntuales de IO */ }
+                catch { }
             }
 
             var fileName = $"Operativa_{date:yyyyMMdd}_{DateTime.Now:HHmm}.pdf";
@@ -37,7 +37,6 @@ namespace OperativaLogistica.Services
             {
                 container.Page(page =>
                 {
-                    // --- A4 apaisado + layout compacto ---
                     page.Size(PageSizes.A4.Landscape);
                     page.Margin(20);
 
@@ -47,31 +46,53 @@ namespace OperativaLogistica.Services
 
                     page.Content().Table(table =>
                     {
-                        var columns = new[]
+                        string[] columns =
                         {
                             "TRANSPORTISTA","MATRICULA","MUELLE","ESTADO","DESTINO",
                             "LLEGADA","LLEGADA REAL","SALIDA REAL","SALIDA TOPE","OBSERVACIONES","INCIDENCIAS"
                         };
 
-                        // Definición de anchos relativos por columna
+                        // Definición de columnas
                         table.ColumnsDefinition(c =>
                         {
-                            c.RelativeColumn(1.2f);  // TRANSPORTISTA
-                            c.RelativeColumn(0.9f);  // MATRICULA
-                            c.RelativeColumn(0.7f);  // MUELLE
-                            c.RelativeColumn(0.9f);  // ESTADO
-                            c.RelativeColumn(1.4f);  // DESTINO
-                            c.RelativeColumn(0.8f);  // LLEGADA
-                            c.RelativeColumn(1.0f);  // LLEGADA REAL
-                            c.RelativeColumn(1.0f);  // SALIDA REAL
-                            c.RelativeColumn(0.9f);  // SALIDA TOPE
-                            c.RelativeColumn(1.4f);  // OBSERVACIONES
-                            c.RelativeColumn(1.2f);  // INCIDENCIAS
+                            foreach (var col in columns)
+                                c.RelativeColumn();
                         });
 
                         // Cabecera
                         table.Header(h =>
                         {
-                            foreach (var t in columns)
-                                h.Cell().Backgrou
+                            foreach (var col in columns)
+                                h.Cell().Background(Colors.Grey.Lighten3).Padding(4)
+                                 .Text(col).SemiBold().FontSize(9);
+                        });
 
+                        // Filas
+                        foreach (var op in data)
+                        {
+                            table.Cell().Padding(3).Text(op.Transportista).FontSize(9);
+                            table.Cell().Padding(3).Text(op.Matricula).FontSize(9);
+                            table.Cell().Padding(3).Text(op.Muelle).FontSize(9);
+                            table.Cell().Padding(3).Text(op.Estado).FontSize(9);
+                            table.Cell().Padding(3).Text(op.Destino).FontSize(9);
+                            table.Cell().Padding(3).Text(op.Llegada).FontSize(9);
+                            table.Cell().Padding(3).Text(op.LlegadaReal ?? "").FontSize(9);
+                            table.Cell().Padding(3).Text(op.SalidaReal ?? "").FontSize(9);
+                            table.Cell().Padding(3).Text(op.SalidaTope).FontSize(9);
+                            table.Cell().Padding(3).Text(op.Observaciones).FontSize(9);
+                            table.Cell().Padding(3).Text(op.Incidencias).FontSize(9);
+                        }
+                    });
+
+                    page.Footer()
+                        .AlignRight()
+                        .Text($"Generado: {DateTime.Now:dd/MM/yyyy HH:mm}")
+                        .FontSize(9);
+                });
+            })
+            .GeneratePdf(path);
+
+            return path;
+        }
+    }
+}
