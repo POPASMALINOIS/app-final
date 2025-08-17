@@ -11,76 +11,23 @@ namespace OperativaLogistica.Services
 {
     public static class ImportService
     {
-        // Mapa de claves "internas" -> lista de sinónimos en cabecera
+        // Sinónimos para mapear cabeceras "libres" a tus 11 categorías
         private static readonly Dictionary<string, string[]> Synonyms = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["TRANSPORTISTA"] = new[] { "transportista", "carrier", "proveedor", "empresa", "transport" },
-            ["MATRICULA"]     = new[] { "matricula", "matrícula", "mat", "plate", "placa", "license", "registration" },
-            ["MUELLE"]        = new[] { "muelle", "dock", "rampa", "bay", "door" },
-            ["ESTADO"]        = new[] { "estado", "status", "est", "situacion", "situación" },
-            ["DESTINO"]       = new[] { "destino", "dest", "destination", "city", "poblacion", "población" },
-            ["LLEGADA"]       = new[] { "llegada", "eta", "hora llegada", "arrival", "hora prevista", "hora entrada teórica" },
-            ["SALIDA TOPE"]   = new[] { "salida tope", "cutoff", "cut-off", "tope salida", "lsl", "hora salida tope" },
-            ["OBSERVACIONES"] = new[] { "observaciones", "observ", "comentarios", "comments", "notes" },
-            ["INCIDENCIAS"]   = new[] { "incidencias", "incid", "issues", "observaciones incidencias", "averías", "retrasos" },
-            // Las reales se rellenan en la app
-            ["LLEGADA REAL"]  = new[] { "llegada real", "hora entrada real", "real arrival" },
-            ["SALIDA REAL"]   = new[] { "salida real", "hora salida real", "real departure" },
+            ["TRANSPORTISTA"] = new[] { "transportista","carrier","empresa","proveedor","transport" },
+            ["MATRICULA"]     = new[] { "matricula","matrícula","mat","plate","placa","license","registration" },
+            ["MUELLE"]        = new[] { "muelle","dock","rampa","bay","door" },
+            ["ESTADO"]        = new[] { "estado","status","situacion","situación" },
+            ["DESTINO"]       = new[] { "destino","dest","destination","city","poblacion","población" },
+            ["LLEGADA"]       = new[] { "llegada","eta","hora llegada","arrival","hora prevista","hora entrada teorica","hora entrada teórica" },
+            ["SALIDA TOPE"]   = new[] { "salida tope","cutoff","cut-off","tope salida","lsl","hora salida tope" },
+            ["OBSERVACIONES"] = new[] { "observaciones","observ","comentarios","comments","notes","nota" },
+            ["INCIDENCIAS"]   = new[] { "incidencias","incid","issues","averias","averías","retrasos","anomalías","anomalias" },
+            ["LLEGADA REAL"]  = new[] { "llegada real","hora entrada real","real arrival" },
+            ["SALIDA REAL"]   = new[] { "salida real","hora salida real","real departure" },
         };
 
-        private static string Normalize(string s)
-        {
-            if (string.IsNullOrWhiteSpace(s)) return "";
-            s = s.Trim().ToLowerInvariant();
-            // quitar tildes
-            var norm = s.Normalize(NormalizationForm.FormD);
-            var sb = new StringBuilder();
-            foreach (var ch in norm)
-            {
-                var uc = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch);
-                if (uc != System.Globalization.UnicodeCategory.NonSpacingMark)
-                    sb.Append(ch);
-            }
-            s = sb.ToString().Normalize(NormalizationForm.FormC);
-            // quitar espacios/puntuación
-            var allowed = s.Where(c => char.IsLetterOrDigit(c));
-            return new string(allowed.ToArray());
-        }
-
-        private static Dictionary<string,int> BuildIndex(IReadOnlyList<string> headers)
-        {
-            // headers: lista 1-based si viene de Excel, 0-based si CSV
-            var idx = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var normHeaders = headers.Select(Normalize).ToArray();
-
-            foreach (var target in Synonyms.Keys)
-            {
-                var wanted = Synonyms[target].Select(Normalize).ToArray();
-                // 1) coincidencia exacta normalizada
-                for (int i = 0; i < normHeaders.Length; i++)
-                {
-                    if (wanted.Contains(normHeaders[i]))
-                    {
-                        idx[target] = i; // índice 0-based para lectura posterior
-                        goto nextKey;
-                    }
-                }
-                // 2) contains (cabeceras largas tipo "hora llegada prevista")
-                for (int i = 0; i < normHeaders.Length; i++)
-                {
-                    if (wanted.Any(w => normHeaders[i].Contains(w)))
-                    {
-                        idx[target] = i;
-                        goto nextKey;
-                    }
-                }
-                // 3) sin coincidencia → no se mapea (se quedará vacío)
-                nextKey:;
-            }
-            return idx;
-        }
-
-        public static List<Operacion> FromCsv(string path, DateOnly? dateOverride = null)
+        public static List<Operacion> FromCsv(string path, DateOnly fecha)
         {
             var lines = File.ReadAllLines(path);
             if (lines.Length == 0) return new();
@@ -92,10 +39,8 @@ namespace OperativaLogistica.Services
             for (int r = 1; r < lines.Length; r++)
             {
                 var parts = SplitCsvLine(lines[r]);
-                string Col(string key)
-                {
-                    return map.TryGetValue(key, out var i) && i >= 0 && i < parts.Length ? parts[i].Trim() : "";
-                }
+                string Col(string key) =>
+                    map.TryGetValue(key, out var i) && i >= 0 && i < parts.Length ? parts[i].Trim() : "";
 
                 var op = new Operacion
                 {
@@ -108,29 +53,35 @@ namespace OperativaLogistica.Services
                     SalidaTope    = NormalizeTime(Col("SALIDA TOPE")),
                     Observaciones = Col("OBSERVACIONES"),
                     Incidencias   = Col("INCIDENCIAS"),
-                    Fecha         = dateOverride ?? DateOnly.FromDateTime(DateTime.Now)
+                    Fecha         = fecha
                 };
                 if (!IsRowEmpty(op)) list.Add(op);
             }
             return list;
         }
 
-        public static List<Operacion> FromXlsx(string path, string? sheetName = null, DateOnly? dateOverride = null)
+        public static List<Operacion> FromXlsx(string path, DateOnly fecha)
         {
             using var wb = new XLWorkbook(path);
-            var ws = sheetName != null ? wb.Worksheet(sheetName) : ChooseWorksheet(wb);
+            var ws = PickWorksheet(wb);
 
-            // localizar la fila de cabeceras (busca en las primeras 10 filas)
-            var headerRow = ws.Rows(1, Math.Min(10, ws.RowCount()))
-                             .FirstOrDefault(r => r.CellsUsed().Any());
-            if (headerRow == null) return new();
+            // Detectar fila de cabecera: elegimos entre las 15 primeras la que más celdas de texto tiene
+            var candidateRows = ws.Rows(1, Math.Min(15, ws.LastRowUsed()?.RowNumber() ?? 1));
+            var headerRow = candidateRows
+                .Select(r => new { Row = r, Score = r.Cells(1, ws.LastColumnUsed().ColumnNumber())
+                                            .Count(c => !string.IsNullOrWhiteSpace(c.GetString())) })
+                .OrderByDescending(x => x.Score)
+                .First().Row;
 
-            var headerCells = headerRow.CellsUsed().Select(c => c.GetString()).ToList();
-            var map = BuildIndex(headerCells);
+            var headers = headerRow.Cells(1, ws.LastColumnUsed().ColumnNumber()).Select(c => c.GetString()).ToList();
+            var map = BuildIndex(headers);
 
             var list = new List<Operacion>();
-            foreach (var row in ws.Rows(headerRow.RowNumber() + 1, ws.LastRowUsed().RowNumber()))
+            var lastRow = ws.LastRowUsed().RowNumber();
+
+            for (int r = headerRow.RowNumber() + 1; r <= lastRow; r++)
             {
+                var row = ws.Row(r);
                 if (!row.CellsUsed().Any()) continue;
 
                 string Get(string key)
@@ -153,66 +104,98 @@ namespace OperativaLogistica.Services
                     SalidaTope    = NormalizeTime(Get("SALIDA TOPE")),
                     Observaciones = Get("OBSERVACIONES"),
                     Incidencias   = Get("INCIDENCIAS"),
-                    Fecha         = dateOverride ?? DateOnly.FromDateTime(DateTime.Now)
+                    Fecha         = fecha
                 };
+
                 if (!IsRowEmpty(op)) list.Add(op);
             }
             return list;
         }
 
-        private static IXLWorksheet ChooseWorksheet(XLWorkbook wb)
+        // --------- Utilidades ---------
+
+        private static IXLWorksheet PickWorksheet(XLWorkbook wb)
         {
-            // Si hay una sola hoja, esa; si hay varias, prioriza la primera que tenga datos
+            // Prioriza la primera hoja con datos
             foreach (var ws in wb.Worksheets)
                 if (ws.FirstRowUsed() != null) return ws;
             return wb.Worksheets.First();
         }
 
-        private static bool IsRowEmpty(Operacion op)
+        private static Dictionary<string,int> BuildIndex(IReadOnlyList<string> headers)
         {
-            return string.IsNullOrWhiteSpace(op.Transportista)
-                && string.IsNullOrWhiteSpace(op.Matricula)
-                && string.IsNullOrWhiteSpace(op.Destino);
+            var idx = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var normHeaders = headers.Select(Normalize).ToArray();
+
+            foreach (var target in Synonyms.Keys)
+            {
+                var wanted = Synonyms[target].Select(Normalize).ToArray();
+
+                // 1) Exacta
+                for (int i = 0; i < normHeaders.Length; i++)
+                    if (wanted.Contains(normHeaders[i])) { idx[target] = i; goto next; }
+
+                // 2) Contiene
+                for (int i = 0; i < normHeaders.Length; i++)
+                    if (wanted.Any(w => normHeaders[i].Contains(w))) { idx[target] = i; goto next; }
+
+                next:;
+            }
+            return idx;
         }
+
+        private static string Normalize(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return "";
+            s = s.Trim().ToLowerInvariant();
+
+            // quitar tildes
+            var nf = s.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder();
+            foreach (var ch in nf)
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                    sb.Append(ch);
+            s = sb.ToString().Normalize(NormalizationForm.FormC);
+
+            // quitar no alfanuméricos
+            return new string(s.Where(char.IsLetterOrDigit).ToArray());
+        }
+
+        private static bool IsRowEmpty(Operacion op) =>
+            string.IsNullOrWhiteSpace(op.Transportista)
+            && string.IsNullOrWhiteSpace(op.Matricula)
+            && string.IsNullOrWhiteSpace(op.Destino);
 
         private static string FromExcelTime(double excelNumber)
         {
-            // Excel guarda horas como fracción de día (0..1). Formateamos HH:mm.
+            // Excel horas = fracción de día
             var ts = TimeSpan.FromDays(excelNumber);
             if (ts.TotalHours < 0 || ts.TotalHours > 48) return "";
             return new DateTime(1,1,1).Add(ts).ToString("HH:mm");
+        }
+
+        private static string[] SplitCsvLine(string line)
+        {
+            var list = new List<string>();
+            bool q = false; string cur = "";
+            foreach (var ch in line)
+            {
+                if (ch == '"') q = !q;
+                else if (ch == ',' && !q) { list.Add(cur.Trim()); cur = ""; }
+                else cur += ch;
+            }
+            list.Add(cur.Trim());
+            return list.ToArray();
         }
 
         private static string NormalizeTime(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return "";
             value = value.Trim().ToLowerInvariant().Replace("h", "").Replace(".", ":");
-            // 7 -> 07:00, 730 -> 07:30, 7:0 -> 07:00, 7:30 -> 07:30
             if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var num))
-            {
-                if (num < 24 && Math.Abs(num - Math.Truncate(num)) < 0.0001) return $"{(int)num:00}:00";
-            }
+                if (num < 24 && Math.Abs(num - Math.Truncate(num)) < 1e-6) return $"{(int)num:00}:00";
+
             var parts = value.Split(':');
             if (parts.Length == 1) return $"{parts[0].PadLeft(2,'0')}:00";
             string hh = parts[0].PadLeft(2,'0');
             string mm = parts[1].PadLeft(2,'0');
-            if (mm.Length > 2) mm = mm[..2];
-            return $"{hh}:{mm}";
-        }
-
-        private static string[] SplitCsvLine(string line)
-        {
-            var list = new List<string>();
-            bool inQuotes = false; var cur = "";
-            for (int i = 0; i < line.Length; i++)
-            {
-                var ch = line[i];
-                if (ch == '"') inQuotes = !inQuotes;
-                else if (ch == ',' && !inQuotes) { list.Add(cur.Trim()); cur = ""; }
-                else cur += ch;
-            }
-            list.Add(cur.Trim());
-            return list.ToArray();
-        }
-    }
-}
