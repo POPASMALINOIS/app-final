@@ -1,41 +1,56 @@
 name: Build Windows (WPF .NET 8)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}   # lo ejecutas a mano desde Actions
 
 jobs:
-  build:
+  build-win:
     runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v3
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: '8.0.x'
 
       - name: Verify project exists
+        shell: pwsh
         run: |
           if (-not (Test-Path "src/OperativaLogistica/OperativaLogistica.csproj")) {
-            Write-Error "❌ No se encuentra src/OperativaLogistica/OperativaLogistica.csproj. Sube la carpeta completa."
+            Write-Error "No se encuentra src/OperativaLogistica/OperativaLogistica.csproj. Sube el proyecto descomprimido respetando la estructura."
           }
 
       - name: Restore
-        run: dotnet restore src/OperativaLogistica/OperativaLogistica.csproj
+        shell: pwsh
+        run: dotnet restore "src/OperativaLogistica/OperativaLogistica.csproj"
 
-      - name: Build
-        run: dotnet build src/OperativaLogistica/OperativaLogistica.csproj -c Release --no-restore
+      - name: Build (Release)
+        shell: pwsh
+        run: dotnet build "src/OperativaLogistica/OperativaLogistica.csproj" -c Release --no-restore -p:UseWpf=true
 
-      - name: Publish self-contained
-        run: dotnet publish src/OperativaLogistica/OperativaLogistica.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
+      - name: Publish (self-contained, single file)
+        shell: pwsh
+        run: >
+          dotnet publish "src/OperativaLogistica/OperativaLogistica.csproj"
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:PublishTrimmed=false
+          -p:UseWpf=true
+          -o Publish/win-x64
 
-      - name: Zip artifact
-        run: Compress-Archive -Path out\* -DestinationPath OperativaLogistica-win-x64.zip
+      - name: Zip published output
+        shell: pwsh
+        run: Compress-Archive -Path Publish/win-x64/* -DestinationPath OperativaLogistica-win-x64.zip
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      - name: Upload artifact (ZIP)
+        uses: actions/upload-artifact@v4
         with:
           name: OperativaLogistica-win-x64
           path: OperativaLogistica-win-x64.zip
