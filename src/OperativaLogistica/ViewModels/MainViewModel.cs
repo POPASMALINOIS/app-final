@@ -103,26 +103,35 @@ namespace OperativaLogistica.ViewModels
         }
 
         private void Import()
-        {
-            var dlg = new OpenFileDialog
-            {
-                Filter = "Ficheros CSV o Excel|*.csv;*.xlsx",
-                CheckFileExists = true,
-                Title = "Selecciona el fichero con la operativa"
-            };
-            if (dlg.ShowDialog() == true)
-            {
-                var path = dlg.FileName;
-                var list = path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
-                    ? ImportService.FromXlsx(path, null, Fecha)
-                    : ImportService.FromCsv(path, Fecha);
+{
+    var dlg = new Microsoft.Win32.OpenFileDialog
+    {
+        Filter = "Ficheros CSV o Excel|*.csv;*.xlsx",
+        CheckFileExists = true,
+        Title = "Selecciona el fichero con la operativa"
+    };
+    if (dlg.ShowDialog() == true)
+    {
+        var path = dlg.FileName;
+        var list = path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+            ? ImportService.FromXlsx(path, Fecha)
+            : ImportService.FromCsv(path, Fecha);
 
-                foreach (var op in list)
-                    _db.Upsert(op);
+        foreach (var op in list)
+            _db.Upsert(op);
 
-                LoadFromDb();
-            }
-        }
+        LoadFromDb();
+
+        System.Windows.MessageBox.Show(
+            list.Count > 0
+                ? $"Importación completada.\nFilas añadidas/actualizadas: {list.Count}"
+                : "No se detectaron filas válidas en el fichero seleccionado.\n\nConsejo: verifica que la fila de cabecera tiene nombres de columnas reconocibles (transportista, matrícula, muelle, estado, destino, llegada, salida tope...).",
+            "Importar operativa",
+            System.Windows.MessageBoxButton.OK,
+            System.Windows.MessageBoxImage.Information);
+    }
+}
+
 
         private void SaveDay()
         {
