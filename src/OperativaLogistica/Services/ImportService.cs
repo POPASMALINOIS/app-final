@@ -24,6 +24,8 @@ namespace OperativaLogistica.Services
             ["INCIDENCIAS"]   = new[] { "incidencias","incid","issues","averias","averías","retrasos","anomalías","anomalias" },
             ["LLEGADA REAL"]  = new[] { "llegada real","hora entrada real","real arrival" },
             ["SALIDA REAL"]   = new[] { "salida real","hora salida real","real departure" },
+            ["PRECINTO"]      = new[] { "precinto","seal","seals" },
+            ["LEX"]           = new[] { "lex","check","oklex" }
         };
 
         public static List<Operacion> FromCsv(string path, DateOnly fecha)
@@ -31,8 +33,8 @@ namespace OperativaLogistica.Services
             var lines = File.ReadAllLines(path);
             if (lines.Length == 0) return new();
 
-            var headerCells = SplitCsvLine(lines[0]).ToList();
-            var map = BuildIndex(headerCells);
+            var headers = SplitCsvLine(lines[0]).ToList();
+            var map = BuildIndex(headers);
 
             var list = new List<Operacion>();
             for (int r = 1; r < lines.Length; r++)
@@ -52,6 +54,10 @@ namespace OperativaLogistica.Services
                     SalidaTope    = NormalizeTime(Col("SALIDA TOPE")),
                     Observaciones = Col("OBSERVACIONES"),
                     Incidencias   = Col("INCIDENCIAS"),
+                    LlegadaReal   = NormalizeTime(Col("LLEGADA REAL")),
+                    SalidaReal    = NormalizeTime(Col("SALIDA REAL")),
+                    Precinto      = Col("PRECINTO"),
+                    Lex           = (Col("LEX") == "1" || Col("LEX").Equals("true", StringComparison.OrdinalIgnoreCase)),
                     Fecha         = fecha
                 };
                 if (!IsRowEmpty(op)) list.Add(op);
@@ -69,22 +75,15 @@ namespace OperativaLogistica.Services
             var lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
             if (lastCol == 0 || lastRow == 0) return new();
 
-            // Detectar posible cabecera (entre las 15 primeras filas)
-            var candidateRows = ws.Rows(1, Math.Min(15, lastRow));
-            var headerRow = candidateRows
-                .Select(r => new
-                {
-                    Row = r,
-                    Score = r.Cells(1, lastCol).Count(c => !string.IsNullOrWhiteSpace(c.GetString()))
-                })
-                .OrderByDescending(x => x.Score)
-                .First().Row;
+            // Cabecera probable (la fila con más celdas no vacías entre las 15 primeras)
+            var headerRow = ws.Rows(1, Math.Min(15, lastRow))
+                .OrderByDescending(r => r.Cells(1, lastCol).Count(c => !string.IsNullOrWhiteSpace(c.GetString())))
+                .First();
 
             var headers = headerRow.Cells(1, lastCol).Select(c => c.GetString()).ToList();
             var map = BuildIndex(headers);
 
             var list = new List<Operacion>();
-
             for (int r = headerRow.RowNumber() + 1; r <= lastRow; r++)
             {
                 var row = ws.Row(r);
@@ -95,11 +94,8 @@ namespace OperativaLogistica.Services
                     if (!map.TryGetValue(key, out var i)) return "";
                     var cell = row.Cell(i + 1);
                     if (cell == null) return "";
-                    if (cell.DataType == XLDataType.Number && (key == "LLEGADA" || key == "SALIDA TOPE"))
-                    {
-                        var d = cell.GetDouble();
-                        return FromExcelTime(d);
-                    }
+                    if (cell.DataType == XLDataType.Number && (key == "LLEGADA" || key == "SALIDA TOPE" || key == "LLEGADA REAL" || key == "SALIDA REAL"))
+                        return FromExcelTime(cell.GetDouble());
                     return cell.GetString()?.Trim() ?? "";
                 }
 
@@ -114,6 +110,10 @@ namespace OperativaLogistica.Services
                     SalidaTope    = NormalizeTime(Get("SALIDA TOPE")),
                     Observaciones = Get("OBSERVACIONES"),
                     Incidencias   = Get("INCIDENCIAS"),
+                    LlegadaReal   = NormalizeTime(Get("LLEGADA REAL")),
+                    SalidaReal    = NormalizeTime(Get("SALIDA REAL")),
+                    Precinto      = Get("PRECINTO"),
+                    Lex           = Get("LEX").Equals("true", StringComparison.OrdinalIgnoreCase) || Get("LEX") == "1",
                     Fecha         = fecha
                 };
 
@@ -122,7 +122,7 @@ namespace OperativaLogistica.Services
             return list;
         }
 
-        // --------- Utilidades ---------
+        // ---------- utilidades ----------
 
         private static IXLWorksheet? PickWorksheet(XLWorkbook wb)
         {
@@ -133,6 +133,7 @@ namespace OperativaLogistica.Services
 
         private static Dictionary<string, int> BuildIndex(IReadOnlyList<string> headers)
         {
+            var cfg = ConfigService.LoadOrCreate();
             var idx = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var normHeaders = headers.Select(Normalize).ToArray();
 
@@ -148,6 +149,16 @@ namespace OperativaLogistica.Services
 
                 next:;
             }
+
+            // Plantilla de mapeo del usuario (mapping.json)
+            foreach (var kv in cfg.Mapping)
+            {
+                var target = kv.Key.ToUpperInvariant();
+                var header = Normalize(kv.Value ?? "");
+                for (int i = 0; i < normHeaders.Length; i++)
+                    if (normHeaders[i] == header) { idx[target] = i; break; }
+            }
+
             return idx;
         }
 
@@ -175,7 +186,7 @@ namespace OperativaLogistica.Services
 
         private static string FromExcelTime(double excelNumber)
         {
-            var ts = TimeSpan.FromDays(excelNumber); // fracción de día
+            var ts = TimeSpan.FromDays(excelNumber);
             if (ts.TotalHours < 0 || ts.TotalHours > 48) return "";
             return new DateTime(1, 1, 1).Add(ts).ToString("HH:mm");
         }
