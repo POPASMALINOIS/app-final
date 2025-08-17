@@ -22,7 +22,7 @@ namespace OperativaLogistica.Services
             using var connection = new SqliteConnection($"Data Source={_dbPath}");
             connection.Open();
 
-            var cmd = connection.CreateCommand();
+            using var cmd = connection.CreateCommand();
             cmd.CommandText =
             @"
             CREATE TABLE IF NOT EXISTS Operaciones (
@@ -50,7 +50,7 @@ namespace OperativaLogistica.Services
             using var connection = new SqliteConnection($"Data Source={_dbPath}");
             connection.Open();
 
-            var cmd = connection.CreateCommand();
+            using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT * FROM Operaciones WHERE Fecha=$f ORDER BY Id";
             cmd.Parameters.AddWithValue("$f", date.ToString("yyyy-MM-dd"));
 
@@ -78,13 +78,12 @@ namespace OperativaLogistica.Services
             return list;
         }
 
-        // 🚩 NUEVO MÉTODO: Borrar todas las operaciones de un día
         public void DeleteByDate(DateOnly date)
         {
             using var connection = new SqliteConnection($"Data Source={_dbPath}");
             connection.Open();
 
-            var cmd = connection.CreateCommand();
+            using var cmd = connection.CreateCommand();
             cmd.CommandText = "DELETE FROM Operaciones WHERE Fecha=$f";
             cmd.Parameters.AddWithValue("$f", date.ToString("yyyy-MM-dd"));
             cmd.ExecuteNonQuery();
@@ -95,10 +94,10 @@ namespace OperativaLogistica.Services
             using var connection = new SqliteConnection($"Data Source={_dbPath}");
             connection.Open();
 
-            SqliteCommand cmd;
+            using var cmd = connection.CreateCommand();
+
             if (op.Id == 0)
             {
-                cmd = connection.CreateCommand();
                 cmd.CommandText =
                 @"
                 INSERT INTO Operaciones 
@@ -108,7 +107,6 @@ namespace OperativaLogistica.Services
             }
             else
             {
-                cmd = connection.CreateCommand();
                 cmd.CommandText =
                 @"
                 UPDATE Operaciones SET
@@ -135,9 +133,13 @@ namespace OperativaLogistica.Services
 
             cmd.ExecuteNonQuery();
 
+            // Obtener el último Id insertado en SQLite (sustituto de LastInsertRowId)
             if (op.Id == 0)
             {
-                op.Id = (int)connection.LastInsertRowId;
+                using var lastCmd = connection.CreateCommand();
+                lastCmd.CommandText = "SELECT last_insert_rowid();";
+                var result = lastCmd.ExecuteScalar();
+                if (result is long l) op.Id = (int)l;
             }
         }
     }
