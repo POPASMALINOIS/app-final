@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
-using OperativaLogistica.Services;
+using OperativaLogistica.Services;      // ⬅️ Necesario para ConfigService/ColumnLayoutService
 using OperativaLogistica.ViewModels;
 
 namespace OperativaLogistica
@@ -13,14 +13,11 @@ namespace OperativaLogistica
         {
             InitializeComponent();
 
-            // Cargar configuración (anchos de columnas)
             _cfg = (DataContext as MainViewModel)?.Config;
 
             Loaded += (_, __) =>
             {
-                // Aplica layout si existe el DataGrid del Tab activo
-                var grid = FindName("GridOps") as DataGrid;
-                if (grid != null && _cfg != null)
+                if (FindName("GridOps") is DataGrid grid && _cfg != null)
                     ColumnLayoutService.Apply(grid, _cfg);
             };
         }
@@ -35,7 +32,6 @@ namespace OperativaLogistica
                 "Acerca de", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        // Se llama desde XAML (DataGrid.LoadingRow)
         private void DataGrid_LoadingRow(object sender, DataGridRowEventArgs e)
         {
             if (sender is DataGrid grid && _cfg != null)
@@ -46,10 +42,9 @@ namespace OperativaLogistica
             }
         }
 
-        // Se llama desde XAML (DataGrid.AutoGeneratingColumn) si cambias auto-gen
         private void DataGrid_AutoGeneratingColumn(object sender, DataGridAutoGeneratingColumnEventArgs e)
         {
-            // Intencionadamente vacío; mantener para futuras reglas de autogeneración
+            // Hueco para futuras reglas de autogeneración
         }
 
         private void Grid_ColumnWidthChanged(object? sender, DataGridColumnEventArgs e)
