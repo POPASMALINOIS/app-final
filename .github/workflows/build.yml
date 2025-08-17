@@ -1,68 +1,41 @@
 name: Build Windows (WPF .NET 8)
 
 on:
-  workflow_dispatch: {}   # lo lanzas manualmente desde Actions
+  workflow_dispatch:
 
 jobs:
   build-win:
-    runs-on: windows-2022
-    timeout-minutes: 30
-    env:
-      DOTNET_NOLOGO: true
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET 8 SDK
+      - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      # (Opcional) Cache de paquetes NuGet para acelerar
-      - name: Cache NuGet
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
+      - name: Restore dependencies
+        run: dotnet restore app-final.sln
 
-      - name: Verify project exists
-        shell: pwsh
-        run: |
-          if (-not (Test-Path "src/OperativaLogistica/OperativaLogistica.csproj")) {
-            Write-Error "❌ No se encuentra src/OperativaLogistica/OperativaLogistica.csproj. Revisa la estructura del repo."
-          }
+      - name: Build solution (Release)
+        run: dotnet build app-final.sln -c Release --no-restore -v detailed
 
-      - name: Restore
-        shell: pwsh
-        run: dotnet restore "src/OperativaLogistica/OperativaLogistica.csproj"
-
-      - name: Build (Release)
-        shell: pwsh
-        run: dotnet build "src/OperativaLogistica/OperativaLogistica.csproj" -c Release --no-restore -p:UseWpf=true
-
-      - name: Publish (self-contained, single file)
-        shell: pwsh
+      - name: Publish app (self-contained, single file)
         run: >
-          dotnet publish "src/OperativaLogistica/OperativaLogistica.csproj"
+          dotnet publish app-final.sln
           -c Release
           -r win-x64
           --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:PublishTrimmed=false
-          -p:UseWpf=true
           -o Publish/win-x64
+          -v detailed
 
-      - name: Zip published output
-        shell: pwsh
-        run: Compress-Archive -Path Publish/win-x64/* -DestinationPath OperativaLogistica-win-x64.zip
-
-      - name: Upload artifact (ZIP)
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: OperativaLogistica-win-x64
-          path: OperativaLogistica-win-x64.zip
-
+          path: Publish/win-x64
