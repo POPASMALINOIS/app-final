@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
@@ -7,124 +6,95 @@ using OperativaLogistica.Models;
 
 namespace OperativaLogistica.Services
 {
+    /// <summary>
+    /// Importación muy sencilla de CSV/Excel. Para Excel se intenta
+    /// CSV fallback si el usuario lo guarda como CSV.
+    /// </summary>
     public class ImportService
     {
         /// <summary>
-        /// Importa un CSV/Excel previamente convertido a líneas de texto.
-        /// Devuelve la lista de Operacion lista para bindear.
-        /// Ojo: si el modelo usa DateOnly, se hace la conversión explícita.
+        /// Importa al <paramref name="destino"/> las filas de <paramref name="filePath"/>.
+        /// La fecha y el lado indicados se asignan a cada operación importada.
         /// </summary>
-        public ObservableCollection<Operacion> ImportFromLines(IEnumerable<string> lines, char sep = ';')
+        public void Importar(ObservableCollection<Operacion> destino, string filePath, DateOnly fecha, string lado)
         {
-            var ops = new ObservableCollection<Operacion>();
-            bool first = true;
+            if (destino is null) throw new ArgumentNullException(nameof(destino));
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                throw new FileNotFoundException("No se encontró el archivo a importar.", filePath);
 
-            foreach (var raw in lines)
+            var ext = Path.GetExtension(filePath).ToLowerInvariant();
+
+            // De momento soportamos CSV directamente. Si es XLS/XLSX pedimos CSV.
+            if (ext is ".csv" or ".txt")
             {
-                if (string.IsNullOrWhiteSpace(raw)) continue;
-
-                // Salta cabecera si la hay
-                if (first)
-                {
-                    first = false;
-                    // heurística simple: si contiene cabeceras conocidas, la saltamos
-                    if (raw.IndexOf("TRANSPORTISTA", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        raw.IndexOf("MATRICULA", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        continue;
-                    }
-                }
-
-                var cols = raw.Split(sep);
-
-                // Ajusta índices a tu estructura real
-                string transportista = cols.Length > 0 ? cols[0].Trim() : "";
-                string matricula     = cols.Length > 1 ? cols[1].Trim() : "";
-                string muelle        = cols.Length > 2 ? cols[2].Trim() : "";
-                string estado        = cols.Length > 3 ? cols[3].Trim() : "";
-                string destino       = cols.Length > 4 ? cols[4].Trim() : "";
-                string llegadaPlan   = cols.Length > 5 ? cols[5].Trim() : "";
-                string salidaTope    = cols.Length > 6 ? cols[6].Trim() : "";
-                string observ        = cols.Length > 7 ? cols[7].Trim() : "";
-                string incidencias   = cols.Length > 8 ? cols[8].Trim() : "";
-                string fechaTxt      = cols.Length > 9 ? cols[9].Trim() : "";
-
-                // Parse de fecha (admite varios formatos habituales)
-                DateTime fechaDt = ParseFechaFlexible(fechaTxt);
-
-                // *** PUNTO CLAVE: si tu modelo usa DateOnly, convierto explícitamente ***
-                var op = new Operacion
-                {
-                    Transportista = transportista,
-                    Matricula     = matricula,
-                    Muelle        = muelle,
-                    Estado        = estado,
-                    Destino       = destino,
-                    Llegada       = llegadaPlan,
-                    SalidaTope    = salidaTope,
-                    Observaciones = observ,
-                    Incidencias   = incidencias
-                };
-
-                // Detecta el tipo de la propiedad Fecha de tu modelo y asigna correctamente
-                var prop = typeof(Operacion).GetProperty("Fecha");
-                if (prop != null)
-                {
-                    if (prop.PropertyType == typeof(DateOnly))
-                    {
-                        prop.SetValue(op, DateOnly.FromDateTime(fechaDt));
-                    }
-                    else if (prop.PropertyType == typeof(DateTime))
-                    {
-                        prop.SetValue(op, fechaDt);
-                    }
-                    else if (prop.PropertyType == typeof(string))
-                    {
-                        prop.SetValue(op, fechaDt.ToString("yyyy-MM-dd"));
-                    }
-                }
-
-                // Si tu modelo tiene LlegadaReal/SalidaReal y son DateTime? o string, no pasa nada por dejarlas vacías aquí.
-
-                ops.Add(op);
+                ImportarCsv(destino, filePath, fecha, lado);
+                return;
             }
 
-            return ops;
+            // Fallback: no rompemos el flujo, sólo informamos.
+            // Puedes conectar aquí tu lector Excel (EPPlus/ClosedXML) si lo prefieres.
+            throw new NotSupportedException("Por ahora el importador espera un CSV. Guarda el Excel como CSV e inténtalo de nuevo.");
+        }
+
+        private static void ImportarCsv(ObservableCollection<Operacion> destino, string filePath, DateOnly fecha, string lado)
+        {
+            destino.Clear();
+
+            using var fs = File.OpenRead(filePath);
+            using var sr = new StreamReader(fs);
+
+            // Intentamos detectar si hay cabecera
+            var firstLine = sr.ReadLine();
+            if (firstLine is null) return;
+
+            bool tieneCabecera = firstLine.Contains("TRANSPORTISTA", StringComparison.OrdinalIgnoreCase)
+                              || firstLine.Contains("MATRICULA", StringComparison.OrdinalIgnoreCase);
+
+            if (!tieneCabecera)
+            {
+                // La primera línea ya es dato
+                ParseAndAdd(destino, firstLine, fecha, lado);
+            }
+
+            // Resto de líneas
+            while (!sr.EndOfStream)
+            {
+                var line = sr.ReadLine();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                ParseAndAdd(destino, line!, fecha, lado);
+            }
         }
 
         /// <summary>
-        /// Ejemplo de carga desde un CSV en disco. Ajusta si usas Excel directamente.
+        /// Parser muy tolerante: asume columnas separadas por ; o , en orden habitual.
+        /// Ajusta aquí si tu plantilla cambia.
         /// </summary>
-        public ObservableCollection<Operacion> ImportFromCsvFile(string filePath, char sep = ';')
+        private static void ParseAndAdd(ObservableCollection<Operacion> destino, string line, DateOnly fecha, string lado)
         {
-            var all = File.ReadAllLines(filePath);
-            return ImportFromLines(all, sep);
-        }
+            var cols = line.Split(new[] { ';', ',' }, StringSplitOptions.None);
 
-        private static DateTime ParseFechaFlexible(string? txt)
-        {
-            if (string.IsNullOrWhiteSpace(txt))
-                return DateTime.Today;
+            // Protegemos accesos fuera de rango
+            string Get(int i) => i >= 0 && i < cols.Length ? cols[i].Trim() : string.Empty;
 
-            // Prueba varios formatos
-            var fmts = new[]
+            var op = new Operacion
             {
-                "yyyy-MM-dd","dd/MM/yyyy","d/M/yyyy","MM/dd/yyyy","M/d/yyyy",
-                "dd-MM-yyyy","d-M-yyyy","yyyyMMdd","ddMMyyyy"
+                Transportista = Get(0),
+                Matricula     = Get(1),
+                Muelle        = Get(2),
+                Estado        = Get(3),
+                Destino       = Get(4),
+                Llegada       = Get(5),
+                LlegadaReal   = Get(6),
+                SalidaReal    = Get(7),
+                SalidaTope    = Get(8),
+                Observaciones = Get(9),
+                Incidencias   = Get(10),
+                // Campos que nos piden los logs:
+                Fecha         = fecha,
+                Lado          = string.IsNullOrWhiteSpace(Get(11)) ? lado : Get(11)
             };
 
-            foreach (var f in fmts)
-            {
-                if (DateTime.TryParseExact(txt, f, CultureInfo.InvariantCulture,
-                                           DateTimeStyles.None, out var dt))
-                    return dt;
-            }
-
-            // última oportunidad: parse normal
-            if (DateTime.TryParse(txt, out var any))
-                return any;
-
-            return DateTime.Today;
+            destino.Add(op);
         }
     }
 }
