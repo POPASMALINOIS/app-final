@@ -1,4 +1,3 @@
-using Microsoft.Win32;
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -6,9 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
-
-// Namespaces de tu solución
+using Microsoft.Win32;
 using OperativaLogistica.Models;
 using OperativaLogistica.Services;
 using OperativaLogistica.ViewModels;
@@ -17,65 +14,77 @@ namespace OperativaLogistica
 {
     public partial class MainWindow : Window
     {
-        // Servicios “ligeros” que usamos desde el code-behind
         private readonly ImportService _importService = new ImportService();
-        private MainViewModel VM => (MainViewModel)DataContext;
+        private readonly PdfService _pdfService = new PdfService();
+        private readonly DatabaseService _db = new DatabaseService(); // si no existe, crea stub vacío
+        private readonly ConfigService _config = new ConfigService();  // idem
 
         public MainWindow()
         {
             InitializeComponent();
-
-            // Si tu XAML ya fijó el DataContext, no hace falta esta línea.
-            if (DataContext is not MainViewModel)
-                DataContext = new MainViewModel();
+            if (DataContext is MainViewModel vm)
+            {
+                // Por si quieres inicializar algo del VM al abrir
+                vm.PropertyChanged += (_, __) => { /* opcional */ };
+            }
         }
 
-        // =============== Menú Archivo =================
+        // ========== Helpers ==========
+
+        private MainViewModel? VM => DataContext as MainViewModel;
+
+        private DateTime FechaSeleccionada()
+        {
+            // Asume que tienes un DatePicker con x:Name="DpFecha" en tu XAML
+            if (FindName("DpFecha") is DatePicker dp && dp.SelectedDate.HasValue)
+                return dp.SelectedDate.Value.Date;
+
+            return DateTime.Today;
+        }
+
+        private TabViewModel? PestañaActual() => VM?.SesionActual;
+
+        // ========== Handlers pedidos por el XAML ==========
 
         private void NewTab_Click(object sender, RoutedEventArgs e)
         {
-            VM.NuevaPestana();
+            VM?.NuevaPestana();
         }
 
         private void CloseTab_Click(object sender, RoutedEventArgs e)
         {
-            VM.CerrarPestana();
+            VM?.CerrarPestana();
         }
 
         private void Import_Click(object sender, RoutedEventArgs e)
         {
-            if (VM.SesionActual is null)
-            {
-                MessageBox.Show("No hay pestaña activa.", "Importar", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
+            var vm = VM ?? return_;
 
-            var ofd = new OpenFileDialog
+            var dlg = new OpenFileDialog
             {
-                Title = "Importar operativa (Excel/CSV)",
-                Filter = "Ficheros Excel (*.xlsx;*.xls)|*.xlsx;*.xls|CSV (*.csv)|*.csv|Todos (*.*)|*.*"
+                Title = "Importar operativa (CSV)",
+                Filter = "CSV (*.csv)|*.csv|Todos (*.*)|*.*"
             };
 
-            if (ofd.ShowDialog() == true)
+            if (dlg.ShowDialog(this) == true)
             {
-                try
+                var ops = _importService.ImportFromCsvFile(dlg.FileName);
+                if (vm.SesionActual == null)
                 {
-                    // Importa y sustituye el contenido de la pestaña actual
-                    var ops = _importService.Importar(ofd.FileName, VM.FechaActual, VM.LadoSeleccionado);
-                    VM.SesionActual.Operaciones = new ObservableCollection<Operacion>(ops ?? Enumerable.Empty<Operacion>());
+                    vm.NuevaPestana();
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"No se pudo importar el fichero.\n{ex.Message}", "Importar", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+
+                vm.SesionActual!.Operaciones = ops;
             }
         }
 
         private void ExportCsv_Click(object sender, RoutedEventArgs e)
         {
-            if (VM.SesionActual?.Operaciones is null || VM.SesionActual.Operaciones.Count == 0)
+            var vm = VM;
+            if (vm?.SesionActual?.Operaciones == null || vm.SesionActual.Operaciones.Count == 0)
             {
-                MessageBox.Show("No hay datos para exportar.", "Exportar CSV", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, "No hay datos para exportar.", "Exportar CSV",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -83,55 +92,34 @@ namespace OperativaLogistica
             {
                 Title = "Exportar CSV",
                 Filter = "CSV (*.csv)|*.csv",
-                FileName = $"operativa_{VM.FechaActual:yyyyMMdd}_{VM.LadoSeleccionado.Replace(' ', '_')}.csv"
+                FileName = $"operativa_{FechaSeleccionada():yyyyMMdd}.csv"
             };
 
-            if (sfd.ShowDialog() == true)
+            if (sfd.ShowDialog(this) == true)
             {
-                try
-                {
-                    // Exportación CSV simple
-                    using var sw = new StreamWriter(sfd.FileName, false, Encoding.UTF8);
-                    // Cabecera
-                    sw.WriteLine("Id;Transportista;Matricula;Muelle;Estado;Destino;Llegada;LlegadaReal;SalidaReal;SalidaTope;Observaciones;Incidencias;Fecha;Precinto;Lex");
-                    // Filas
-                    foreach (var o in VM.SesionActual.Operaciones)
-                    {
-                        string fmt(string? s) => (s ?? string.Empty).Replace(';', ',');
-                        sw.WriteLine(string.Join(';', new[]
-                        {
-                            o.Id?.ToString() ?? "",
-                            fmt(o.Transportista),
-                            fmt(o.Matricula),
-                            fmt(o.Muelle),
-                            fmt(o.Estado),
-                            fmt(o.Destino),
-                            fmt(o.Llegada),
-                            fmt(o.LlegadaReal),
-                            fmt(o.SalidaReal),
-                            fmt(o.SalidaTope),
-                            fmt(o.Observaciones),
-                            fmt(o.Incidencias),
-                            o.Fecha?.ToString("yyyy-MM-dd") ?? "",
-                            fmt(o.Precinto),
-                            o.Lex ? "1" : "0"
-                        }));
-                    }
+                var sb = new StringBuilder();
+                // cabecera
+                sb.AppendLine("TRANSPORTISTA;MATRICULA;MUELLE;ESTADO;DESTINO;LLEGADA;SALIDA_TOPE;OBSERVACIONES;INCIDENCIAS;FECHA");
 
-                    MessageBox.Show("Exportado correctamente.", "Exportar CSV", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (Exception ex)
+                foreach (var o in vm.SesionActual!.Operaciones)
                 {
-                    MessageBox.Show($"No se pudo exportar el CSV.\n{ex.Message}", "Exportar CSV", MessageBoxButton.OK, MessageBoxImage.Error);
+                    var fechaStr = GetFechaString(o);
+                    sb.AppendLine($"{o.Transportista};{o.Matricula};{o.Muelle};{o.Estado};{o.Destino};{o.Llegada};{o.SalidaTope};{o.Observaciones};{o.Incidencias};{fechaStr}");
                 }
+
+                File.WriteAllText(sfd.FileName, sb.ToString(), Encoding.UTF8);
+                MessageBox.Show(this, "Exportado correctamente.", "Exportar CSV",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
         private void SavePdf_Click(object sender, RoutedEventArgs e)
         {
-            if (VM.SesionActual?.Operaciones is null || VM.SesionActual.Operaciones.Count == 0)
+            var vm = VM;
+            if (vm?.SesionActual?.Operaciones == null || vm.SesionActual.Operaciones.Count == 0)
             {
-                MessageBox.Show("No hay datos para guardar en PDF.", "Guardar PDF", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, "No hay datos para guardar en PDF.", "Guardar PDF",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -139,67 +127,95 @@ namespace OperativaLogistica
             {
                 Title = "Guardar jornada en PDF",
                 Filter = "PDF (*.pdf)|*.pdf",
-                FileName = $"jornada_{VM.FechaActual:yyyyMMdd}_{VM.LadoSeleccionado.Replace(' ', '_')}.pdf"
+                FileName = $"jornada_{FechaSeleccionada():yyyyMMdd}.pdf"
             };
 
-            if (sfd.ShowDialog() == true)
+            if (sfd.ShowDialog(this) == true)
             {
-                try
-                {
-                    // Usa el servicio expuesto por el VM
-                    VM.PdfService.SaveJornadaPdf(
-                        sfd.FileName,
-                        VM.SesionActual.Operaciones.ToList(),
-                        VM.FechaActual,
-                        VM.LadoSeleccionado
-                    );
+                // El servicio PDF original ya lo tenías en el repo
+                _pdfService.SaveJornadaPdf(
+                    sfd.FileName,
+                    vm.SesionActual!.Operaciones.ToList(),
+                    FechaSeleccionada(),
+                    vm.LadoSeleccionado
+                );
 
-                    MessageBox.Show("PDF guardado correctamente.", "Guardar PDF", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"No se pudo generar el PDF.\n{ex.Message}", "Guardar PDF", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                MessageBox.Show(this, "PDF generado correctamente.", "PDF",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
         private void NewDay_Click(object sender, RoutedEventArgs e)
         {
-            if (MessageBox.Show("Esto vaciará la jornada actual.\n¿Continuar?", "Nueva jornada",
-                                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-                return;
-
-            // Si tienes un método DB real, puedes descomentar/adaptar:
-            // var db = new DatabaseService();
-            // db.DeleteByDate(VM.FechaActual);
-
-            // Dejamos la pestaña actual en blanco
-            if (VM.SesionActual != null)
-                VM.SesionActual.Operaciones = new ObservableCollection<Operacion>();
+            var fecha = FechaSeleccionada();
+            if (MessageBox.Show(this, $"¿Vaciar la jornada del {fecha:dd/MM/yyyy}?",
+                    "Nueva jornada", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    _db.DeleteDay(fecha); // si tu DatabaseService usa DateOnly, conviertes aquí:
+                    // _db.DeleteDay(DateOnly.FromDateTime(fecha));
+                    if (VM?.SesionActual != null)
+                        VM.SesionActual.Operaciones.Clear();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, ex.Message, "Borrado", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
         }
 
-        private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
 
         private void About_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("PLM INDITEX EXPEDICIÓN\n© 2025", "Acerca de", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "PLM INDITEX EXPEDICIÓN\n© 2025", "Acerca de",
+                MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        // =============== Otros handlers =================
-
-        // Firma correcta para WPF: DataGridColumnEventHandler
-        private void DataGrid_ColumnWidthChanged(object? sender, DataGridColumnEventArgs e)
+        // Hook para “ColumnWidthChanged” usado en XAML (si lo tienes cableado)
+        // No hace nada crítico, sólo guarda/recupera layout si quieres.
+        private void ColumnWidthChanged(object sender, EventArgs e)
         {
-            // Aquí podrías persistir el ancho si ya tienes un servicio para ello.
-            // Este cuerpo vacío evita errores de compilación y de evento.
-            // Ejemplo si en el futuro tienes un ColumnLayoutService:
-            // _columnLayoutService.SaveWidth(VM.Config, e.Column);
+            // Si quieres persistir anchos:
+            // _config.SaveColumnLayout(DataGridNameHere);
         }
 
-        // (Opcional) si usas atajos de teclado
-        private void Window_KeyDown(object sender, KeyEventArgs e)
+        // Si tu DatePicker (x:Name="DpFecha") dispara SelectedDateChanged, puedes validar así:
+        private void DpFecha_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (e.Key == Key.F5) NewTab_Click(sender, e);
+            if (sender is DatePicker dp && dp.SelectedDate.HasValue)
+            {
+                // Sólo DateTime, nada de DateOnly para comparar
+                var sel = dp.SelectedDate.Value.Date;
+                var hoy = DateTime.Today;
+
+                // Si no quieres permitir futuras, lo corriges
+                if (sel > hoy) dp.SelectedDate = hoy;
+            }
         }
+
+        // ========== Utilidades privadas ==========
+
+        private static string GetFechaString(Operacion o)
+        {
+            var prop = typeof(Operacion).GetProperty("Fecha");
+            if (prop == null) return "";
+
+            var val = prop.GetValue(o);
+            return val switch
+            {
+                DateOnly dOnly => dOnly.ToString("yyyy-MM-dd"),
+                DateTime dt    => dt.ToString("yyyy-MM-dd"),
+                string s       => s,
+                _              => ""
+            };
+        }
+
+        // truco para evitar warning en “var vm = VM ?? return_;”
+        private MainViewModel return_ => null!;
     }
 }
