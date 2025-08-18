@@ -57,27 +57,27 @@ namespace OperativaLogistica
                     Filter = "Excel (*.xlsx;*.xls)|*.xlsx;*.xls|CSV (*.csv)|*.csv|Todos (*.*)|*.*"
                 };
                 if (dlg.ShowDialog() != true) return;
-
+        
                 if (_vm.SesionActual is null)
                     _vm.NuevaPestana();
-
+        
+                // 👇 Convertimos DateTime -> DateOnly para cumplir la nueva firma
                 var fecha = DateOnly.FromDateTime(_vm.FechaActual);
-                var lado = _vm.LadoSeleccionado ?? "LADO 0";
-
-                // 🔹 Conversión DateOnly → DateTime
-                var ops = _importService.Importar(dlg.FileName,
-                    fecha.ToDateTime(TimeOnly.MinValue),
-                    lado) ?? Enumerable.Empty<Operacion>();
-
-                // Carga en la pestaña activa (vacía por defecto)
+                var lado  = _vm.LadoSeleccionado ?? "LADO 0";
+        
+                var ops = _importService.Importar(dlg.FileName, fecha, lado) 
+                          ?? Enumerable.Empty<Operacion>();
+        
                 var target = _vm.SesionActual!;
                 target.Operaciones = new ObservableCollection<Operacion>(ops);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"Error al importar: {ex.Message}", "Importar", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(this, $"Error al importar: {ex.Message}", "Importar",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
 
         private void ExportCsv_Click(object sender, RoutedEventArgs e)
         {
