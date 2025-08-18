@@ -4,23 +4,23 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 
-// Ajusta los namespaces si tu solución usa otros
 using OperativaLogistica.Models;
 using OperativaLogistica.Services;
 
 namespace OperativaLogistica.ViewModels
 {
     /// <summary>
-    /// VM raíz de la aplicación. Expone todas las propiedades/métodos que
-    /// el XAML y el code-behind están intentando usar (según tus logs de build).
+    /// VM raíz de la aplicación.
     /// </summary>
     public class MainViewModel : INotifyPropertyChanged
     {
         // ========= Eventos =========
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        // ========= Servicios expuestos (para que compile todo el XAML/CodeBehind) =========
-        public ConfigService Config { get; } = new ConfigService();
+        // ========= Servicios =========
+        // ¡OJO! Solo UNA propiedad 'Config' para evitar el CS0102.
+        public ConfigService Config { get; }
+        public PdfService PdfService { get; } = new PdfService();
 
         // ========= Estado global =========
         private DateTime _fechaActual = DateTime.Today;
@@ -37,8 +37,8 @@ namespace OperativaLogistica.ViewModels
             set { _ladoSeleccionado = value; OnPropertyChanged(); }
         }
 
-        // Colección de pestañas y la pestaña activa
-        public ObservableCollection<TabViewModel> Pestanas { get; } = new ObservableCollection<TabViewModel>();
+        // Pestañas y pestaña activa
+        public ObservableCollection<TabViewModel> Pestanas { get; } = new();
 
         private TabViewModel? _sesionActual;
         public TabViewModel? SesionActual
@@ -47,15 +47,21 @@ namespace OperativaLogistica.ViewModels
             set { _sesionActual = value; OnPropertyChanged(); }
         }
 
-        // ========= Comandos opcionales =========
+        // ========= Comandos =========
         public ICommand NuevaPestanaCommand { get; }
         public ICommand CerrarPestanaCommand { get; }
         public ICommand SaveJornadaPdfCommand { get; }
 
-        // ========= Ctor =========
-        public MainViewModel()
+        // ========= Constructores =========
+        public MainViewModel() : this(new ConfigService())
         {
-            // Al menos una pestaña en blanco al iniciar
+        }
+
+        public MainViewModel(ConfigService config)
+        {
+            Config = config;
+
+            // Al menos una pestaña al iniciar
             NuevaPestanaCore();
 
             NuevaPestanaCommand   = new RelayCommand(_ => NuevaPestana());
@@ -63,8 +69,7 @@ namespace OperativaLogistica.ViewModels
             SaveJornadaPdfCommand = new RelayCommand(_ => SaveJornadaPdf(), _ => SesionActual != null);
         }
 
-        // ========= Métodos que el XAML/CodeBehind están esperando =========
-
+        // ========= API pública usada por la vista =========
         /// <summary> Crea una nueva pestaña en blanco y la activa. </summary>
         public void NuevaPestana() => NuevaPestanaCore();
 
@@ -78,18 +83,16 @@ namespace OperativaLogistica.ViewModels
         }
 
         /// <summary>
-        /// Guardar PDF de la jornada actual (command opcional).
+        /// Punto de entrada opcional si quieres lanzar la exportación a PDF desde Command.
+        /// El code-behind puede llamar a PdfService directamente con el diálogo de guardado.
         /// </summary>
         public void SaveJornadaPdf()
         {
-            // El SavePdf_Click del code-behind ya usa PdfService.SaveJornadaPdf(...)
+            // Aquí no forzamos la ruta de guardado para no interferir con el diálogo UI.
+            // Deja esta función como “hook” si la necesitas desde XAML.
         }
 
-        public void Config() { /* placeholder */ }
-        public void Operaciones() { /* placeholder */ }
-
         // ========= Helpers internos =========
-
         private void NuevaPestanaCore()
         {
             var titulo = !string.IsNullOrWhiteSpace(LadoSeleccionado) ? LadoSeleccionado : "Operativa";
@@ -107,38 +110,7 @@ namespace OperativaLogistica.ViewModels
     }
 
     /// <summary>
-    /// VM de cada pestaña. MUY IMPORTANTE: Operaciones notifica cuando se reasigna.
-    /// </summary>
-    public class TabViewModel : INotifyPropertyChanged
-    {
-        public event PropertyChangedEventHandler? PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string? p = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
-
-        private string _titulo = "Operativa";
-        public string Titulo
-        {
-            get => _titulo;
-            set { _titulo = value; OnPropertyChanged(); }
-        }
-
-        private ObservableCollection<Operacion> _operaciones = new();
-        public ObservableCollection<Operacion> Operaciones
-        {
-            get => _operaciones;
-            set
-            {
-                if (!ReferenceEquals(_operaciones, value))
-                {
-                    _operaciones = value ?? new ObservableCollection<Operacion>();
-                    OnPropertyChanged(); // notifica al DataGrid si reasignas la colección completa
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// RelayCommand muy simple para usar comandos en el VM.
+    /// RelayCommand para comandos simples en el VM.
     /// </summary>
     public class RelayCommand : ICommand
     {
