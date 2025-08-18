@@ -1,13 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
-
 using OperativaLogistica.Models;
 using OperativaLogistica.Services;
 using OperativaLogistica.ViewModels;
@@ -24,52 +21,41 @@ namespace OperativaLogistica
         {
             InitializeComponent();
 
-            // ViewModel: si ya lo setea el XAML, respeta; si no, crea uno.
             _vm = DataContext as MainViewModel ?? new MainViewModel();
             DataContext = _vm;
 
-            // Asegura al menos una pestaña inicial
             if (_vm.SesionActual is null)
                 _vm.NuevaPestana();
         }
 
-        // ===============  MENÚ: Pestañas  ===============
+        // ===== Pestañas =====
+        private void NewTab_Click(object sender, RoutedEventArgs e)   => _vm.NuevaPestana();
+        private void CloseTab_Click(object sender, RoutedEventArgs e) => _vm.CerrarPestana();
 
-        private void NewTab_Click(object sender, RoutedEventArgs e)
-        {
-            _vm.NuevaPestana();
-        }
-
-        private void CloseTab_Click(object sender, RoutedEventArgs e)
-        {
-            _vm.CerrarPestana();
-        }
-
-        // ===============  MENÚ: Importar / Exportar / PDF  ===============
-
+        // ===== Importar/Exportar/PDF =====
         private void Import_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 var dlg = new OpenFileDialog
                 {
-                    Title = "Importar operativa (Excel/CSV)",
+                    Title  = "Importar operativa (Excel/CSV)",
                     Filter = "Excel (*.xlsx;*.xls)|*.xlsx;*.xls|CSV (*.csv)|*.csv|Todos (*.*)|*.*"
                 };
                 if (dlg.ShowDialog() != true) return;
-        
+
                 if (_vm.SesionActual is null)
                     _vm.NuevaPestana();
-        
-                // 👇 Convertimos DateTime -> DateOnly para cumplir la nueva firma
+
                 var fecha = DateOnly.FromDateTime(_vm.FechaActual);
                 var lado  = _vm.LadoSeleccionado ?? "LADO 0";
-        
-                var ops = _importService.Importar(dlg.FileName, fecha, lado) 
-                          ?? Enumerable.Empty<Operacion>();
-        
+
+                var ops = _importService.Importar(dlg.FileName, fecha, lado) ?? Enumerable.Empty<Operacion>();
+
+                // *** CLAVE: no reasignar la colección para refrescar al instante ***
                 var target = _vm.SesionActual!;
-                target.Operaciones = new ObservableCollection<Operacion>(ops);
+                target.Operaciones.Clear();
+                foreach (var o in ops) target.Operaciones.Add(o);
             }
             catch (Exception ex)
             {
@@ -77,7 +63,6 @@ namespace OperativaLogistica
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
 
         private void ExportCsv_Click(object sender, RoutedEventArgs e)
         {
@@ -104,7 +89,8 @@ namespace OperativaLogistica
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"Error al exportar CSV: {ex.Message}", "Exportar CSV", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(this, $"Error al exportar CSV: {ex.Message}", "Exportar CSV",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -128,14 +114,9 @@ namespace OperativaLogistica
                 if (dlg.ShowDialog() != true) return;
 
                 var fecha = DateOnly.FromDateTime(_vm.FechaActual);
-                var lado = _vm.LadoSeleccionado ?? "LADO 0";
+                var lado  = _vm.LadoSeleccionado ?? "LADO 0";
 
-                // 🔹 Conversión DateOnly → DateTime
-                _vm.PdfService.SaveJornadaPdf(dlg.FileName,
-                    _vm.SesionActual.Operaciones,
-                    fecha.ToDateTime(TimeOnly.MinValue),
-                    lado);
-
+                _vm.PdfService.SaveJornadaPdf(dlg.FileName, _vm.SesionActual.Operaciones, fecha, lado);
                 MessageBox.Show(this, "PDF generado correctamente.", "Guardar PDF",
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -146,24 +127,19 @@ namespace OperativaLogistica
             }
         }
 
-        // ===============  MENÚ: Jornada  ===============
-
+        // ===== Jornada =====
         private void NewDay_Click(object sender, RoutedEventArgs e)
         {
             var fecha = DateOnly.FromDateTime(_vm.FechaActual);
             var r = MessageBox.Show(this,
                 $"Se va a vaciar la jornada del {fecha:dd/MM/yyyy}.\n\n¿Continuar?",
-                "Nueva jornada",
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
+                "Nueva jornada", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (r != MessageBoxResult.Yes) return;
 
             try
             {
-                // Borra en BD
                 _databaseService.DeleteDay(fecha);
-
-                // Limpia las pestañas actuales
                 if (_vm.SesionActual != null)
                     _vm.SesionActual.Operaciones.Clear();
             }
@@ -174,10 +150,7 @@ namespace OperativaLogistica
             }
         }
 
-        private void Exit_Click(object sender, RoutedEventArgs e)
-        {
-            Close();
-        }
+        private void Exit_Click(object sender, RoutedEventArgs e) => Close();
 
         private void About_Click(object sender, RoutedEventArgs e)
         {
@@ -185,14 +158,10 @@ namespace OperativaLogistica
                 "Acerca de", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        // ===============  DataGrid: ancho de columnas (hook “no-op”)  ===============
-
         private void DataGrid_ColumnWidthChanged(object sender, DataGridColumnEventArgs e)
         {
-            // Hook para que compile. Aquí podrías persistir layout si tienes un servicio para ello.
+            // Hook por si quieres persistir layout.
         }
-
-        // ===============  Utilidades  ===============
 
         private static void ExportarCsv(string filePath, IEnumerable<Operacion> ops)
         {
@@ -203,30 +172,19 @@ namespace OperativaLogistica
                 "Observaciones","Incidencias","Fecha","Precinto","Lex","Lado"
             };
 
-            using var sw = new StreamWriter(filePath, false, Encoding.UTF8);
+            using var sw = new System.IO.StreamWriter(filePath, false, Encoding.UTF8);
             sw.WriteLine(string.Join(";", headers));
+
+            static string S(object? v) => (v?.ToString() ?? "").Replace(';', ',');
 
             foreach (var o in ops)
             {
-                static string S(object? v) => (v?.ToString() ?? "").Replace(';', ',');
                 var line = string.Join(";",
-                    S(o.Id),
-                    S(o.Transportista),
-                    S(o.Matricula),
-                    S(o.Muelle),
-                    S(o.Estado),
-                    S(o.Destino),
-                    S(o.Llegada),
-                    S(o.LlegadaReal),
-                    S(o.SalidaReal),
-                    S(o.SalidaTope),
-                    S(o.Observaciones),
-                    S(o.Incidencias),
-                    S(o.Fecha),
-                    S(o.Precinto),
-                    S(o.Lex),
-                    S(o.Lado)
-                );
+                    S(o.Id), S(o.Transportista), S(o.Matricula), S(o.Muelle),
+                    S(o.Estado), S(o.Destino),
+                    S(o.Llegada), S(o.LlegadaReal), S(o.SalidaReal), S(o.SalidaTope),
+                    S(o.Observaciones), S(o.Incidencias),
+                    S(o.Fecha), S(o.Precinto), S(o.Lex), S(o.Lado));
                 sw.WriteLine(line);
             }
         }
