@@ -5,186 +5,138 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:OperativaLogistica.ViewModels"
         mc:Ignorable="d"
-        Title="Operativa Logística" Height="850" Width="1400"
-        WindowStartupLocation="CenterScreen">
+        Title="Operativa Logística" Height="900" Width="1600">
 
-    <!-- ====== RECURSOS ====== -->
-    <Window.Resources>
-        <!-- Opciones de Estado -->
-        <x:Array x:Key="EstadoOptions" Type="{x:Type sys:String}"
-                 xmlns:sys="clr-namespace:System;assembly=mscorlib">
-            <sys:String>CARGANDO</sys:String>
-            <sys:String>OK</sys:String>
-            <sys:String>ANULADO</sys:String>
-        </x:Array>
-
-        <!-- Opciones de Incidencias -->
-        <x:Array x:Key="IncidenciasOptions" Type="{x:Type sys:String}"
-                 xmlns:sys="clr-namespace:System;assembly=mscorlib">
-            <sys:String>RETRASO TRANSPORTISTA</sys:String>
-            <sys:String>RETRASO DOCUMENTACION</sys:String>
-            <sys:String>INCIDENCIA REMOLQUE</sys:String>
-            <sys:String>ANULADO</sys:String>
-        </x:Array>
-    </Window.Resources>
-
-    <!-- ====== CONTENIDO ====== -->
     <DockPanel>
 
-        <!-- Barra superior simple: Fecha, Lado, Buscar y acciones básicas -->
-        <ToolBar DockPanel.Dock="Top">
-            <TextBlock Text="Fecha:" VerticalAlignment="Center" Margin="4,0"/>
-            <DatePicker SelectedDate="{Binding SelectedSession.SelectedDate, Mode=TwoWay}"
-                        DisplayDate="{Binding SelectedSession.SelectedDate}" Margin="0,0,8,0"/>
+        <!-- Barra superior -->
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Background="#EEE" Padding="8">
+            <TextBlock Text="Fecha:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <DatePicker SelectedDate="{Binding FechaActual}" Width="140" Margin="0,0,12,0"/>
 
-            <TextBlock Text="Lado:" VerticalAlignment="Center" Margin="4,0"/>
-            <ComboBox Width="120" Margin="0,0,8,0"
-                      ItemsSource="{Binding Source={x:Static vm:TabLadosProvider.Items}}"
-                      SelectedItem="{Binding SelectedSession.SelectedLado, Mode=TwoWay}"/>
+            <TextBlock Text="Buscar:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBox Text="{Binding Filtro, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="0,0,12,0"/>
 
-            <Separator/>
+            <TextBlock Text="Lado:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <ComboBox Width="120"
+                      ItemsSource="{x:Static vm:TabLadosProvider.Items}"
+                      SelectedItem="{Binding LadoSeleccionado}" Margin="0,0,12,0"/>
+        </StackPanel>
 
-            <TextBlock Text="Buscar:" VerticalAlignment="Center" Margin="4,0"/>
-            <TextBox Width="200" Margin="0,0,8,0"
-                     Text="{Binding SelectedSession.FilterText, UpdateSourceTrigger=PropertyChanged}"/>
-
-            <Separator/>
-
-            <Button Content="Importar" Command="{Binding ImportCommand}" Margin="4,0"/>
-            <Button Content="Exportar CSV" Command="{Binding ExportCsvCommand}" Margin="4,0"/>
-            <Button Content="Guardar PDF" Command="{Binding SavePdfCommand}" Margin="4,0"/>
-            <Button Content="Nueva pestaña" Command="{Binding NewTabCommand}" Margin="4,0"/>
-            <Button Content="Cerrar pestaña" Command="{Binding CloseTabCommand}" Margin="4,0"/>
-        </ToolBar>
-
-        <!-- PESTAÑAS -->
-        <TabControl ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}">
-            <!-- Título de pestaña = valor del ComboBox "Lado" -->
+        <!-- Tabs (varias jornadas en paralelo) -->
+        <TabControl ItemsSource="{Binding Sesiones}" SelectedItem="{Binding SesionActual}">
             <TabControl.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock Text="{Binding SelectedLado}" />
+                    <TextBlock Text="{Binding NombrePestana}" />
                 </DataTemplate>
             </TabControl.ItemTemplate>
 
             <TabControl.ContentTemplate>
-                <DataTemplate DataType="{x:Type vm:SessionViewModel}">
-                    <Grid>
-                        <!-- TABLA PRINCIPAL -->
-                        <DataGrid x:Name="GridOps"
-                                  ItemsSource="{Binding View}"
-                                  AutoGenerateColumns="False"
-                                  IsReadOnly="False"
-                                  LoadingRow="DataGrid_LoadingRow"
-                                  AutoGeneratingColumn="DataGrid_AutoGeneratingColumn"
-                                  HeadersVisibility="Column"
-                                  GridLinesVisibility="Horizontal"
-                                  CanUserResizeColumns="True"
-                                  EnableRowVirtualization="True"
-                                  Margin="6"
-                                  SelectionMode="Extended"
-                                  SelectionUnit="FullRow">
+                <DataTemplate>
+                    <DataGrid x:Name="GridOps"
+                              ItemsSource="{Binding Operaciones}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="True"
+                              CanUserResizeColumns="True"
+                              HeadersVisibility="All"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              DockPanel.Dock="Top">
 
-                            <!-- >>>>>> IMPORTANTE: Columns SIEMPRE dentro del DataGrid <<<<<< -->
-                            <DataGrid.Columns>
+                        <DataGrid.Columns>
 
-                                <!-- Transportista -->
-                                <DataGridTextColumn Header="TRANSPORTISTA"
-                                                    Binding="{Binding Transportista, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="200" />
+                            <!-- TRANSPORTISTA -->
+                            <DataGridTextColumn Header="TRANSPORTISTA" Binding="{Binding Transportista}" Width="200"/>
 
-                                <!-- Matricula -->
-                                <DataGridTextColumn Header="MATRICULA"
-                                                    Binding="{Binding Matricula, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="120" />
+                            <!-- MATRICULA -->
+                            <DataGridTextColumn Header="MATRICULA" Binding="{Binding Matricula}" Width="120"/>
 
-                                <!-- Muelle -->
-                                <DataGridTextColumn Header="MUELLE"
-                                                    Binding="{Binding Muelle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="80" />
+                            <!-- MUELLE -->
+                            <DataGridTextColumn Header="MUELLE" Binding="{Binding Muelle}" Width="100"/>
 
-                                <!-- Estado (Combo) -->
-                                <DataGridTemplateColumn Header="ESTADO" Width="120">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ComboBox ItemsSource="{StaticResource EstadoOptions}"
-                                                      SelectedItem="{Binding Estado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                      Padding="0" />
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
+                            <!-- ESTADO (desplegable) -->
+                            <DataGridComboBoxColumn Header="ESTADO"
+                                                    SelectedItemBinding="{Binding Estado, Mode=TwoWay}"
+                                                    Width="150"
+                                                    ItemsSource="{Binding Source={x:Static vm:EstadosProvider.Items}}"/>
 
-                                <!-- Destino -->
-                                <DataGridTextColumn Header="DESTINO"
-                                                    Binding="{Binding Destino, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="220" />
+                            <!-- DESTINO -->
+                            <DataGridTextColumn Header="DESTINO" Binding="{Binding Destino}" Width="200"/>
 
-                                <!-- Llegada -->
-                                <DataGridTextColumn Header="LLEGADA"
-                                                    Binding="{Binding Llegada, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="80" />
+                            <!-- LLEGADA -->
+                            <DataGridTextColumn Header="LLEGADA" Binding="{Binding Llegada}" Width="100"/>
 
-                                <!-- Llegada Real con botón ⏱ -->
-                                <DataGridTemplateColumn Header="LLEGADA REAL" Width="160">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding LlegadaReal}" Width="70"
-                                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                                <Button Content="⏱" Width="32"
-                                                        Command="{Binding DataContext.MarkLlegadaCommand, ElementName=GridOps}"
-                                                        CommandParameter="{Binding .}"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
+                            <!-- LLEGADA REAL -->
+                            <DataGridTemplateColumn Header="LLEGADA REAL" Width="160">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding LlegadaReal}" Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <Button Content="⏱" Width="32"
+                                                    Command="{Binding DataContext.MarkLlegadaCommand, ElementName=GridOps}"
+                                                    CommandParameter="{Binding .}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
-                                <!-- Salida Real con botón ⏱ -->
-                                <DataGridTemplateColumn Header="SALIDA REAL" Width="160">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding SalidaReal}" Width="70"
-                                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                                <Button Content="⏱" Width="32"
-                                                        Command="{Binding DataContext.MarkSalidaCommand, ElementName=GridOps}"
-                                                        CommandParameter="{Binding .}"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
+                            <!-- SALIDA REAL -->
+                            <DataGridTemplateColumn Header="SALIDA REAL" Width="160">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding SalidaReal}" Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <Button Content="⏱" Width="32"
+                                                    Command="{Binding DataContext.MarkSalidaCommand, ElementName=GridOps}"
+                                                    CommandParameter="{Binding .}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
-                                <!-- Salida Tope -->
-                                <DataGridTextColumn Header="SALIDA TOPE"
-                                                    Binding="{Binding SalidaTope, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="100" />
+                            <!-- SALIDA TOPE -->
+                            <DataGridTextColumn Header="SALIDA TOPE" Binding="{Binding SalidaTope}" Width="100"/>
 
-                                <!-- Observaciones -->
-                                <DataGridTextColumn Header="OBSERVACIONES"
-                                                    Binding="{Binding Observaciones, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="220" />
+                            <!-- OBSERVACIONES -->
+                            <DataGridTextColumn Header="OBSERVACIONES" Binding="{Binding Observaciones}" Width="220"/>
 
-                                <!-- Incidencias (Combo) -->
-                                <DataGridTemplateColumn Header="INCIDENCIAS" Width="200">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <ComboBox ItemsSource="{StaticResource IncidenciasOptions}"
-                                                      SelectedItem="{Binding Incidencias, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                      Padding="0"/>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
+                            <!-- INCIDENCIAS (corregida con opción "SIN INCIDENCIAS") -->
+                            <DataGridTemplateColumn Header="INCIDENCIAS" Width="220">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox Padding="0"
+                                                  SelectedValue="{Binding Incidencias, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  SelectedValuePath="Content">
+                                            <ComboBox.Items>
+                                                <!-- Opción para limpiar (cadena vacía) -->
+                                                <ComboBoxItem Content="">
+                                                    <ComboBoxItem.Template>
+                                                        <ControlTemplate TargetType="ComboBoxItem">
+                                                            <TextBlock Text="SIN INCIDENCIAS" Foreground="Gray"/>
+                                                        </ControlTemplate>
+                                                    </ComboBoxItem.Template>
+                                                </ComboBoxItem>
 
-                                <!-- Precinto -->
-                                <DataGridTextColumn Header="PRECINTO"
-                                                    Binding="{Binding Precinto, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="120" />
+                                                <!-- Resto de opciones -->
+                                                <ComboBoxItem Content="RETRASO TRANSPORTISTA"/>
+                                                <ComboBoxItem Content="RETRASO DOCUMENTACION"/>
+                                                <ComboBoxItem Content="INCIDENCIA REMOLQUE"/>
+                                                <ComboBoxItem Content="ANULADO"/>
+                                            </ComboBox.Items>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
-                                <!-- LEX (checkbox) -->
-                                <DataGridCheckBoxColumn Header="LEX"
-                                                        Binding="{Binding Lex, Mode=TwoWay}"
-                                                        Width="60" />
+                            <!-- PRECINTO -->
+                            <DataGridTextColumn Header="PRECINTO" Binding="{Binding Precinto}" Width="120"/>
 
-                                <!-- Fecha (oculta visualmente pero útil si quieres filtrar) -->
-                                <DataGridTextColumn Header="Fecha"
-                                                    Binding="{Binding Fecha}"
-                                                    Visibility="Collapsed" />
+                            <!-- LEX -->
+                            <DataGridCheckBoxColumn Header="LEX" Binding="{Binding Lex}" Width="60"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DataTemplate>
+            </TabControl.ContentTemplate>
+        </TabControl>
+    </DockPanel>
+</Window>
