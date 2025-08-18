@@ -3,26 +3,18 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
-
-// Ajusta los namespaces si tu solución usa otros
 using OperativaLogistica.Models;
 using OperativaLogistica.Services;
 
 namespace OperativaLogistica.ViewModels
 {
-    /// <summary>
-    /// VM raíz de la aplicación.
-    /// </summary>
     public class MainViewModel : INotifyPropertyChanged
     {
-        // ========= Eventos =========
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        // ========= Servicios =========
         public ConfigService Config { get; } = new ConfigService();
         public PdfService PdfService { get; } = new PdfService();
 
-        // ========= Estado global =========
         private DateTime _fechaActual = DateTime.Today;
         public DateTime FechaActual
         {
@@ -37,8 +29,7 @@ namespace OperativaLogistica.ViewModels
             set { _ladoSeleccionado = value; OnPropertyChanged(); }
         }
 
-        // Colección de pestañas y la pestaña activa
-        public ObservableCollection<TabViewModel> Pestanas { get; } = new ObservableCollection<TabViewModel>();
+        public ObservableCollection<TabViewModel> Pestanas { get; } = new();
 
         private TabViewModel? _sesionActual;
         public TabViewModel? SesionActual
@@ -47,15 +38,12 @@ namespace OperativaLogistica.ViewModels
             set { _sesionActual = value; OnPropertyChanged(); }
         }
 
-        // ========= Comandos =========
         public ICommand NuevaPestanaCommand { get; }
         public ICommand CerrarPestanaCommand { get; }
         public ICommand SaveJornadaPdfCommand { get; }
 
-        // ========= Ctor =========
         public MainViewModel()
         {
-            // Al menos una pestaña en blanco al iniciar
             NuevaPestanaCore();
 
             NuevaPestanaCommand   = new RelayCommand(_ => NuevaPestana());
@@ -63,12 +51,8 @@ namespace OperativaLogistica.ViewModels
             SaveJornadaPdfCommand = new RelayCommand(_ => SaveJornadaPdf(), _ => SesionActual != null);
         }
 
-        // ========= Métodos expuestos =========
-
-        /// <summary> Crea una nueva pestaña en blanco y la activa. </summary>
         public void NuevaPestana() => NuevaPestanaCore();
 
-        /// <summary> Cierra la pestaña activa. </summary>
         public void CerrarPestana()
         {
             if (SesionActual is null) return;
@@ -77,22 +61,13 @@ namespace OperativaLogistica.ViewModels
             SesionActual = Pestanas.Count > 0 ? Pestanas[Math.Max(0, idx - 1)] : null;
         }
 
-        /// <summary>
-        /// Punto de entrada si alguna acción quiere invocar el guardado PDF desde el VM.
-        /// (El guardado real lo haces con diálogo en el code-behind usando PdfService).
-        /// </summary>
         public void SaveJornadaPdf()
         {
-            // Intencionadamente vacío (compatibilidad con bindings/comandos).
+            // Se lanza desde el code-behind con diálogo.
         }
 
-        /// <summary>
-        /// Placeholder por compatibilidad si tu XAML hace referencia a "Operaciones"
-        /// como acción (no interfiere con la propiedad Operaciones de TabViewModel).
-        /// </summary>
-        public void Operaciones() { /* placeholder */ }
-
-        // ========= Helpers internos =========
+        public void Config() { }
+        public void Operaciones() { }
 
         private void NuevaPestanaCore()
         {
@@ -111,12 +86,12 @@ namespace OperativaLogistica.ViewModels
     }
 
     /// <summary>
-    /// VM de cada pestaña.
+    /// PESTAÑA: ahora Operaciones notifica cuando se REASIGNA la colección.
     /// </summary>
     public class TabViewModel : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string? p = null)
+        void OnPropertyChanged([CallerMemberName] string? p = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 
         private string _titulo = "Operativa";
@@ -126,12 +101,21 @@ namespace OperativaLogistica.ViewModels
             set { _titulo = value; OnPropertyChanged(); }
         }
 
-        public ObservableCollection<Operacion> Operaciones { get; set; } = new ObservableCollection<Operacion>();
+        private ObservableCollection<Operacion> _operaciones = new();
+        public ObservableCollection<Operacion> Operaciones
+        {
+            get => _operaciones;
+            set
+            {
+                if (!ReferenceEquals(_operaciones, value))
+                {
+                    _operaciones = value;
+                    OnPropertyChanged(); // <— notifica el cambio de referencia
+                }
+            }
+        }
     }
 
-    /// <summary>
-    /// RelayCommand simple para comandos en el VM.
-    /// </summary>
     public class RelayCommand : ICommand
     {
         private readonly Action<object?> _execute;
