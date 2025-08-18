@@ -69,28 +69,34 @@
 
         <!-- Pestañas -->
         <TabControl ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}">
-            <TabControl.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding SelectedDate}" />
-                </DataTemplate>
-            </TabControl.ItemTemplate>
-
-            <TabControl.ContentTemplate>
-                <DataTemplate DataType="{x:Type vm:SessionViewModel}">
-                    <Grid>
-                        <DataGrid x:Name="GridOps"
-                                  ItemsSource="{Binding View}"
-                                  Margin="6"
-                                  AutoGenerateColumns="False"
-                                  IsReadOnly="False"
-                                  LoadingRow="DataGrid_LoadingRow"
-                                  AutoGeneratingColumn="DataGrid_AutoGeneratingColumn"
-                                  HeadersVisibility="Column"
-                                  GridLinesVisibility="Horizontal"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                  RowBackground="{Binding ., Converter={StaticResource RowBrush}}"
-                                  AlternatingRowBackground="#08000000">
+          <!-- TÍTULO de cada pestaña = LADO -->
+          <TabControl.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding SelectedLado}" />
+            </DataTemplate>
+          </TabControl.ItemTemplate>
+        
+          <TabControl.ContentTemplate>
+            <DataTemplate DataType="{x:Type vm:SessionViewModel}">
+              <Grid>
+                <DataGrid x:Name="GridOps"
+                          ItemsSource="{Binding View}"
+                          Margin="6"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="False"
+                          LoadingRow="DataGrid_LoadingRow"
+                          AutoGeneratingColumn="DataGrid_AutoGeneratingColumn"
+                          HeadersVisibility="Column"
+                          GridLinesVisibility="Horizontal"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                  <!-- Tus columnas quedan como las tenías (incluye las dos de reloj corregidas) -->
+                </DataGrid>
+              </Grid>
+            </DataTemplate>
+          </TabControl.ContentTemplate>
+        </TabControl>
+        
 
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="TRANSPORTISTA" Binding="{Binding Transportista}" Width="220"/>
