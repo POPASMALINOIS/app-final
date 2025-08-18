@@ -1,28 +1,31 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <LangVersion>latest</LangVersion>
+
+    <!-- Opcional: si tu restore sigue tratando NU1605 como error, descomenta la siguiente línea
+         para suprimir sólo ese warning. Lo ideal es NO dejarlo a largo plazo. -->
+    <!-- <NoWarn>$(NoWarn);NU1605</NoWarn> -->
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- SQLite moderno (NO usar System.Data.SQLite) -->
-    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.7" />
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.7" />
-
-    <!-- Excel/PDF (según lo que vienes usando) -->
-    <PackageReference Include="ClosedXML" Version="0.103.0" />
-    <PackageReference Include="DocumentFormat.OpenXml" Version="2.20.0" />
-
-    <!-- Config JSON si lo usas -->
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
-
-    <!-- **MVVM Toolkit**: genera [ObservableProperty], [RelayCommand], etc. -->
+    <!-- Paquetes WPF/infra -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+
+    <!-- Excel: fija ClosedXML a la rama 0.104.x y, MUY IMPORTANTE,
+         referencia DIRECTAMENTE OpenXml 3.0.1 para evitar la “downgrade” a 2.20.0 -->
+    <PackageReference Include="ClosedXML" Version="0.104.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.0.1" />
+
+    <!-- SQLite administrado (Microsoft.Data.Sqlite) -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.7" />
+
+    <!-- Logging sencillo (opcional, si lo usas) -->
+    <!-- <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" /> -->
   </ItemGroup>
+
+  <!-- Si tenías System.Data.SQLite o referencias antiguas, elimínalas del proyecto -->
 
 </Project>
