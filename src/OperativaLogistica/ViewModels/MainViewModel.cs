@@ -21,7 +21,6 @@ namespace OperativaLogistica.ViewModels
 
         // ========= Servicios expuestos (para que compile todo el XAML/CodeBehind) =========
         public ConfigService Config { get; } = new ConfigService();
-        public PdfService PdfService { get; } = new PdfService();
 
         // ========= Estado global =========
         private DateTime _fechaActual = DateTime.Today;
