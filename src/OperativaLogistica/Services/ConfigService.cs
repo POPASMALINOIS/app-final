@@ -6,103 +6,73 @@ using System.Text.Json;
 namespace OperativaLogistica.Services
 {
     /// <summary>
-    /// Servicio muy simple de configuración persistida en JSON.
-    /// Carpeta: Escritorio\APP OPERATIVAS\config.json
-    /// Contenido: anchos de columna, colores por estado, etc.
+    /// Servicio de configuración simple basado en JSON.
+    /// Guarda ficheros en Escritorio\APP OPERATIVAS\config
     /// </summary>
     public class ConfigService
     {
-        private const string AppFolderName = "APP OPERATIVAS";
-        private const string ConfigFileName = "config.json";
-
-        private readonly string _appFolderPath;
-        private readonly string _configPath;
-
-        private ConfigDto _config = new ConfigDto();
+        private readonly string _root;
 
         public ConfigService()
         {
-            _appFolderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), AppFolderName);
-            _configPath = Path.Combine(_appFolderPath, ConfigFileName);
-            Directory.CreateDirectory(_appFolderPath);
-            Load();
+            var desk = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            _root = Path.Combine(desk, "APP OPERATIVAS", "config");
+            Directory.CreateDirectory(_root);
         }
 
-        public IReadOnlyDictionary<string, double> ColumnWidths => _config.ColumnWidths;
-        public IReadOnlyDictionary<string, string> EstadoColors => _config.EstadoColors;
+        public string GetConfigPath(string fileName) => Path.Combine(_root, fileName);
 
-        public void SetColumnWidth(string columnKey, double width)
+        // ---------- Helpers genéricos ----------
+        public T LoadOrCreate<T>(string filePath, Func<T> createDefault)
         {
-            if (string.IsNullOrWhiteSpace(columnKey)) return;
-            _config.ColumnWidths[columnKey] = width;
-            Save();
-        }
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
 
-        public double GetColumnWidth(string columnKey, double fallback = 120)
-        {
-            if (string.IsNullOrWhiteSpace(columnKey)) return fallback;
-            return _config.ColumnWidths.TryGetValue(columnKey, out var w) ? w : fallback;
-        }
-
-        public void SetEstadoColor(string estado, string colorHex)
-        {
-            if (string.IsNullOrWhiteSpace(estado)) return;
-            _config.EstadoColors[estado] = colorHex;
-            Save();
-        }
-
-        public string GetEstadoColor(string estado, string fallback = "#FFFFFF")
-        {
-            if (string.IsNullOrWhiteSpace(estado)) return fallback;
-            return _config.EstadoColors.TryGetValue(estado, out var c) ? c : fallback;
-        }
-
-        public void Save()
-        {
-            var json = JsonSerializer.Serialize(_config, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_configPath, json);
-        }
-
-        public void Load()
-        {
-            try
+            if (File.Exists(filePath))
             {
-                if (File.Exists(_configPath))
+                try
                 {
-                    var json = File.ReadAllText(_configPath);
-                    _config = JsonSerializer.Deserialize<ConfigDto>(json) ?? new ConfigDto();
+                    var json = File.ReadAllText(filePath);
+                    var obj = JsonSerializer.Deserialize<T>(json,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (obj != null) return obj;
                 }
-                else
-                {
-                    // Valores por defecto
-                    _config = new ConfigDto
-                    {
-                        EstadoColors = new Dictionary<string, string>
-                        {
-                            // Config colores por defecto
-                            ["CARGANDO"] = "#FFF59D",
-                            ["OK"]       = "#C8E6C9",
-                            ["ANULADO"]  = "#FFCDD2",
-                            ["RETRASO TRANSPORTISTA"] = "#FFCDD2",
-                            ["RETRASO DOCUMENTACION"] = "#FFCDD2",
-                            ["INCIDENCIA REMOLQUE"]   = "#FFCDD2",
-                            ["SIN INCIDENCIAS"]       = "#FFFFFF"
-                        }
-                    };
-                    Save();
-                }
+                catch { /* si falla, devolvemos default */ }
             }
-            catch
-            {
-                // Si hay problema leyendo JSON, usamos defaults
-                _config = new ConfigDto();
-            }
+
+            var def = createDefault();
+            Save(filePath, def);
+            return def;
         }
 
-        private sealed class ConfigDto
+        public void Save<T>(string filePath, T data)
         {
-            public Dictionary<string, double> ColumnWidths { get; set; } = new();
-            public Dictionary<string, string> EstadoColors { get; set; } = new();
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+            var json = JsonSerializer.Serialize(
+                data,
+                new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(filePath, json);
         }
+
+        // ---------- Layout de columnas ----------
+        public ColumnLayout LoadOrCreateColumnLayout(string lado)
+        {
+            var path = GetConfigPath($"columns_{lado}.json");
+            return LoadOrCreate(path, () => new ColumnLayout());
+        }
+
+        public void SaveColumnLayout(string lado, IReadOnlyDictionary<string, double> widths)
+        {
+            var dto = new ColumnLayout
+            {
+                Widths = new Dictionary<string, double>(widths)
+            };
+            var path = GetConfigPath($"columns_{lado}.json");
+            Save(path, dto);
+        }
+    }
+
+    public class ColumnLayout
+    {
+        public Dictionary<string, double> Widths { get; set; } = new Dictionary<string, double>();
     }
 }
