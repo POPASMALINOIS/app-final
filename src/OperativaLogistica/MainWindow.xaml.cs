@@ -16,7 +16,6 @@ namespace OperativaLogistica
 {
     public partial class MainWindow : Window
     {
-        // VM raíz y servicios
         private readonly MainViewModel _vm;
         private readonly ImportService _importService = new ImportService();
         private readonly DatabaseService _databaseService = new DatabaseService();
@@ -25,59 +24,39 @@ namespace OperativaLogistica
         {
             InitializeComponent();
 
-            // Usa el VM ya asignado en XAML, o crea uno.
             _vm = DataContext as MainViewModel ?? new MainViewModel();
             DataContext = _vm;
 
-            // Asegura una pestaña inicial
             if (_vm.SesionActual is null)
                 _vm.NuevaPestana();
         }
 
-        // ===================== MENÚ / BOTONES =====================
+        private void NewTab_Click(object sender, RoutedEventArgs e) => _vm.NuevaPestana();
+        private void CloseTab_Click(object sender, RoutedEventArgs e) => _vm.CerrarPestana();
 
-        private void NewTab_Click(object sender, RoutedEventArgs e)
-        {
-            _vm.NuevaPestana();
-        }
-
-        private void CloseTab_Click(object sender, RoutedEventArgs e)
-        {
-            _vm.CerrarPestana();
-        }
-
-        /// <summary>
-        /// IMPORTAR (Excel/CSV). No reemplaza la colección: limpia y añade para que el DataGrid refresque.
-        /// </summary>
         private void Import_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 var dlg = new OpenFileDialog
                 {
-                    Title  = "Importar operativa (Excel/CSV)",
+                    Title = "Importar operativa (Excel/CSV)",
                     Filter = "Excel/CSV (*.xlsx;*.xls;*.csv)|*.xlsx;*.xls;*.csv|Todos (*.*)|*.*"
                 };
                 if (dlg.ShowDialog() != true) return;
-        
-                // Asegura que haya pestaña activa
-                if (_vm?.SesionActual is null)
-                    _vm?.NuevaPestana();
-        
-                // Fecha y lado desde el VM (con fallback por si acaso)
-                var fecha = DateOnly.FromDateTime(_vm?.FechaActual ?? DateTime.Today);
-                var lado  = string.IsNullOrWhiteSpace(_vm?.LadoSeleccionado) ? "LADO 0" : _vm!.LadoSeleccionado;
-        
-                // Importa
-                var importService = new ImportService();
-                var nuevos = importService.Importar(dlg.FileName, fecha, lado) ?? Enumerable.Empty<Operacion>();
-        
-                // 🚀 CLAVE: NO reasignar la colección -> vaciar y añadir para refrescar el DataGrid
-                var target = _vm!.SesionActual!.Operaciones;
+
+                if (_vm.SesionActual is null)
+                    _vm.NuevaPestana();
+
+                var fecha = DateOnly.FromDateTime(_vm.FechaActual);
+                var lado  = string.IsNullOrWhiteSpace(_vm.LadoSeleccionado) ? "LADO 0" : _vm.LadoSeleccionado;
+
+                var items = _importService.Importar(dlg.FileName, fecha, lado) ?? Enumerable.Empty<Operacion>();
+
+                var target = _vm.SesionActual!.Operaciones;
                 target.Clear();
-                foreach (var op in nuevos)
-                    target.Add(op);
-        
+                foreach (var op in items) target.Add(op);
+
                 MessageBox.Show(this, "Importación completada.", "Importar",
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -87,7 +66,6 @@ namespace OperativaLogistica
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
 
         private void ExportCsv_Click(object sender, RoutedEventArgs e)
         {
@@ -138,10 +116,14 @@ namespace OperativaLogistica
                 };
                 if (dlg.ShowDialog() != true) return;
 
-                var fecha = DateOnly.FromDateTime(_vm.FechaActual);
-                var lado = string.IsNullOrWhiteSpace(_vm.LadoSeleccionado) ? "LADO 0" : _vm.LadoSeleccionado;
+                var fechaOnly = DateOnly.FromDateTime(_vm.FechaActual);
+                var lado      = string.IsNullOrWhiteSpace(_vm.LadoSeleccionado) ? "LADO 0" : _vm.LadoSeleccionado;
 
-                _vm.PdfService.SaveJornadaPdf(dlg.FileName, _vm.SesionActual.Operaciones, fecha, lado);
+                // FIX: convertir DateOnly -> DateTime para el servicio de PDF
+                var fechaDateTime = fechaOnly.ToDateTime(TimeOnly.MinValue);
+
+                _vm.PdfService.SaveJornadaPdf(dlg.FileName, _vm.SesionActual.Operaciones, fechaDateTime, lado);
+
                 MessageBox.Show(this, "PDF generado correctamente.", "Guardar PDF",
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -165,9 +147,7 @@ namespace OperativaLogistica
             try
             {
                 _databaseService.DeleteDay(fecha);
-
-                if (_vm.SesionActual != null)
-                    _vm.SesionActual.Operaciones.Clear();
+                _vm.SesionActual?.Operaciones.Clear();
             }
             catch (Exception ex)
             {
@@ -176,27 +156,13 @@ namespace OperativaLogistica
             }
         }
 
-        private void Exit_Click(object sender, RoutedEventArgs e)
-        {
-            Close();
-        }
+        private void Exit_Click(object sender, RoutedEventArgs e) => Close();
 
         private void About_Click(object sender, RoutedEventArgs e)
         {
             MessageBox.Show(this, "PLM INDITEX EXPEDICIÓN\n\nAplicación de operativa logística.",
                 "Acerca de", MessageBoxButton.OK, MessageBoxImage.Information);
         }
-
-        /// <summary>
-        /// Hook opcional por si en XAML está enganchado a DataGrid.ColumnWidthChanged.
-        /// </summary>
-        private void DataGrid_ColumnWidthChanged(object sender, DataGridColumnEventArgs e)
-        {
-            // Si algún día quieres guardar layout:
-            // _vm.Config.SaveColumnLayout("principal", (DataGrid)sender);
-        }
-
-        // ===================== UTILIDADES =====================
 
         private static void ExportarCsv(string filePath, IEnumerable<Operacion> ops)
         {
@@ -227,7 +193,7 @@ namespace OperativaLogistica
                     S(o.SalidaTope),
                     S(o.Observaciones),
                     S(o.Incidencias),
-                    S(o.Fecha),      // DateOnly ToString() -> cultura actual; ajusta si quieres yyyy-MM-dd
+                    S(o.Fecha),
                     S(o.Precinto),
                     S(o.Lex),
                     S(o.Lado)
