@@ -23,6 +23,32 @@ namespace OperativaLogistica
         public MainWindow()
         {
             InitializeComponent();
+            private void Import_Click(object sender, RoutedEventArgs e)
+{
+    var dlg = new Microsoft.Win32.OpenFileDialog
+    {
+        Filter = "Archivos CSV o Excel|*.csv;*.xls;*.xlsx"
+    };
+
+    if (dlg.ShowDialog() == true)
+    {
+        if (DataContext is OperativaLogistica.ViewModels.TabViewModel vm)
+        {
+            var importService = new OperativaLogistica.Services.ImportService();
+            var nuevos = importService.Importar(
+                dlg.FileName,
+                DateOnly.FromDateTime(DateTime.Today),
+                "LADO 1"
+            );
+
+            // 🔹 En lugar de sustituir la colección, la vaciamos y rellenamos
+            vm.Operaciones.Clear();
+            foreach (var op in nuevos)
+                vm.Operaciones.Add(op);
+        }
+    }
+}
+
 
             _vm = DataContext as MainViewModel ?? new MainViewModel();
             DataContext = _vm;
