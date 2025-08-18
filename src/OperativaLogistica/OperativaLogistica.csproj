@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -6,12 +6,23 @@
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- SQLite oficial para .NET -->
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.7" />
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.8" />
+    <!-- SQLite moderno (NO usar System.Data.SQLite) -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.7" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.7" />
+
+    <!-- Excel/PDF (según lo que vienes usando) -->
+    <PackageReference Include="ClosedXML" Version="0.103.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="2.20.0" />
+
+    <!-- Config JSON si lo usas -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+
+    <!-- **MVVM Toolkit**: genera [ObservableProperty], [RelayCommand], etc. -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
   </ItemGroup>
 
 </Project>
