@@ -110,6 +110,16 @@ namespace OperativaLogistica.Services
             return list;
         }
 
+        public void DeleteDay(DateOnly fecha)
+        {
+            using var con = GetConnection(); // tu método existente para abrir SQLite
+            con.Open();
+            using var cmd = con.CreateCommand();
+            cmd.CommandText = "DELETE FROM Operaciones WHERE Fecha = @f"; // ajusta el nombre de tabla/campo
+            cmd.Parameters.AddWithValue("@f", fecha.ToString("yyyy-MM-dd"));
+            cmd.ExecuteNonQuery();
+        }
+
         public void DeleteByDate(DateOnly date)
         {
             using var connection = new SqliteConnection($"Data Source={_dbPath}");
