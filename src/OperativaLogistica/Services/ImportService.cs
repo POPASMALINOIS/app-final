@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Text.RegularExpressions;
+using System.Linq;
+using System.Text;
 using ClosedXML.Excel;
 using OperativaLogistica.Models;
 
@@ -11,143 +12,118 @@ namespace OperativaLogistica.Services
     public class ImportService
     {
         /// <summary>
-        /// Importa operaciones desde un archivo:
-        ///  - CSV con separador ';'
-        ///  - Excel (XLS/XLSX) con cabeceras en la primera fila del rango usado
-        /// Cabeceras admitidas (case-insensitive y tolerantes a tildes/sinónimos):
-        /// Id, Transportista (o Proveedor), Matricula, Muelle, Estado, Destino,
-        /// Llegada, Llegada Real (o Entrada Real), Salida Real, Salida Tope (o Tope Salida),
-        /// Observaciones, Incidencias, Fecha (o Día), Precinto, Lex, Lado
+        /// Importa operaciones desde un archivo CSV/Excel.
+        /// - CSV: separador ';' con cabecera en primera línea.
+        /// - Excel: primera fila = cabecera. Mapeo por nombre de columna (tolerante a acentos/espacios).
         /// </summary>
-        public IEnumerable<Operacion> Importar(string filePath, DateOnly fecha, string lado)
+        public IEnumerable<Operacion> Importar(string filePath, DateOnly fechaPorDefecto, string ladoPorDefecto)
         {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                return Array.Empty<Operacion>();
+
             var ext = Path.GetExtension(filePath).ToLowerInvariant();
             return ext switch
             {
-                ".csv"  => ImportCsv(filePath, fecha, lado),
-                ".xls"  => ImportExcel(filePath, fecha, lado),
-                ".xlsx" => ImportExcel(filePath, fecha, lado),
+                ".csv"  => ImportCsv(filePath, fechaPorDefecto, ladoPorDefecto),
+                ".xls"  => ImportExcel(filePath, fechaPorDefecto, ladoPorDefecto),
+                ".xlsx" => ImportExcel(filePath, fechaPorDefecto, ladoPorDefecto),
                 _       => Array.Empty<Operacion>()
             };
         }
 
-        // ---------------- CSV ----------------
-
+        // =====================================================================
+        // CSV
+        // =====================================================================
         private static IEnumerable<Operacion> ImportCsv(string filePath, DateOnly fechaPorDefecto, string ladoPorDefecto)
         {
             var list = new List<Operacion>();
-            if (!File.Exists(filePath)) return list;
+            using var sr = new StreamReader(filePath, DetectEncoding(filePath));
 
-            using var sr = new StreamReader(filePath);
-            string? line = sr.ReadLine(); // cabecera (se ignora si existe)
+            // Cabecera
+            var headerLine = sr.ReadLine();
+            if (string.IsNullOrWhiteSpace(headerLine)) return list;
+
+            var headers = headerLine.Split(';').Select(Norm).ToArray();
+            var map = BuildHeaderMap(headers);
+
+            // Filas
+            string? line;
             while ((line = sr.ReadLine()) != null)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var cols = line.Split(';');
-                if (cols.Length < 16) Array.Resize(ref cols, 16);
 
-                list.Add(CreateOperacion(
-                    cols[0], cols[1], cols[2], cols[3], cols[4], cols[5],
-                    cols[6], cols[7], cols[8], cols[9],
-                    cols[10], cols[11], cols[12], cols[13], cols[14], cols[15],
-                    fechaPorDefecto, ladoPorDefecto));
+                string Get(string k) => GetByHeader(map, headers, cols, k);
+                string GetFecha()    => Get("FECHA");
+
+                var op = CreateOperacion(
+                    Get("ID"),
+                    Get("TRANSPORTISTA"),
+                    Get("MATRICULA"),
+                    Get("MUELLE"),
+                    Get("ESTADO"),
+                    Get("DESTINO"),
+                    Get("LLEGADA"),
+                    Get("LLEGADA REAL"),
+                    Get("SALIDA REAL"),
+                    Get("SALIDA TOPE"),
+                    Get("OBSERVACIONES"),
+                    Get("INCIDENCIAS"),
+                    GetFecha(),
+                    Get("PRECINTO"),
+                    Get("LEX"),
+                    Get("LADO"),
+                    fechaPorDefecto, ladoPorDefecto);
+
+                list.Add(op);
             }
+
             return list;
         }
 
-        // ---------------- Excel (ClosedXML) ----------------
+        private static Encoding DetectEncoding(string path)
+        {
+            // Sencillo: si empieza con BOM UTF8, usa UTF8; si no, Default.
+            using var fs = File.OpenRead(path);
+            var bom = new byte[3];
+            _ = fs.Read(bom, 0, 3);
+            if (bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF) return new UTF8Encoding(true);
+            return Encoding.UTF8;
+        }
 
+        private static string GetByHeader(Dictionary<string, int> map, string[] headers, string[] cols, string key)
+        {
+            if (!map.TryGetValue(key, out var idx) || idx < 0 || idx >= cols.Length) return "";
+            return (cols[idx] ?? "").Trim();
+        }
+
+        // =====================================================================
+        // Excel
+        // =====================================================================
         private static IEnumerable<Operacion> ImportExcel(string filePath, DateOnly fechaPorDefecto, string ladoPorDefecto)
         {
             var list = new List<Operacion>();
-            if (!File.Exists(filePath)) return list;
-
             using var wb = new XLWorkbook(filePath);
+
             var ws = wb.Worksheets.Count > 0 ? wb.Worksheet(1) : null;
-            if (ws == null) return list;
+            if (ws is null) return list;
 
             var used = ws.RangeUsed();
             if (used is null) return list;
 
-            // límites del rango usado (1-based)
             int r0 = used.FirstRow().RowNumber();
             int c0 = used.FirstColumn().ColumnNumber();
             int r1 = used.LastRow().RowNumber();
             int c1 = used.LastColumn().ColumnNumber();
 
-            // ---- Mapeo de cabeceras robusto (normaliza tildes, signos y espacios; acepta sinónimos)
-            var canon = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                // Básicas
-                ["ID"] = "ID",
-                ["TRANSPORTISTA"] = "TRANSPORTISTA",
-                ["PROVEEDOR"] = "TRANSPORTISTA",
-
-                ["MATRICULA"] = "MATRICULA",
-                ["MATRÍCULA"] = "MATRICULA",
-
-                ["MUELLE"] = "MUELLE",
-                ["ESTADO"] = "ESTADO",
-                ["DESTINO"] = "DESTINO",
-
-                // Tiempos
-                ["LLEGADA"] = "LLEGADA",
-                ["LLEGADA REAL"] = "LLEGADA REAL",
-                ["ENTRADA REAL"] = "LLEGADA REAL",
-                ["SALIDA REAL"]  = "SALIDA REAL",
-                ["SALIDA TOPE"]  = "SALIDA TOPE",
-                ["TOPE SALIDA"]  = "SALIDA TOPE",
-
-                // Texto/varios
-                ["OBSERVACIONES"] = "OBSERVACIONES",
-                ["INCIDENCIAS"]   = "INCIDENCIAS",
-                ["FECHA"]         = "FECHA",
-                ["DIA"]           = "FECHA",
-                ["DÍA"]           = "FECHA",
-                ["PRECINTO"]      = "PRECINTO",
-                ["LEX"]           = "LEX",
-                ["LADO"]          = "LADO",
-            };
-
-            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-            // lee y normaliza cabeceras de la primera fila del rango usado (r0)
+            // Cabeceras normalizadas
+            var headers = new List<string>();
             for (int c = c0; c <= c1; c++)
             {
-                var raw = ws.Cell(r0, c).GetString().Trim();
-                if (string.IsNullOrEmpty(raw)) continue;
-
-                var norm = NormalizeHeader(raw);
-                if (canon.TryGetValue(norm, out var key))
-                    map[key] = c;
-                else
-                    map[norm] = c; // por si ya coincide tras normalizar
+                var raw = ws.Cell(r0, c).GetString();
+                headers.Add(Norm(raw));
             }
-
-            bool tieneCabecerasUtiles =
-                map.ContainsKey("ID") || map.ContainsKey("TRANSPORTISTA") || map.ContainsKey("MATRICULA");
-
-            // Helpers seguros
-            string S(int row, string header)
-            {
-                if (!map.TryGetValue(header, out int c)) return "";
-                if (c < c0 || c > c1) return "";
-                return ws.Cell(row, c).GetString().Trim();
-            }
-
-            string FechaStr(int row)
-            {
-                if (!map.TryGetValue("FECHA", out int c)) return "";
-                if (c < c0 || c > c1) return "";
-                var cell = ws.Cell(row, c);
-                if (TryGetDateOnly(cell, out var d))
-                    return d.ToString("yyyy-MM-dd");
-                return cell.GetString().Trim();
-            }
-
-            // Leer por índice absoluto (fallback sin cabeceras)
-            string SByIndex(int row, int col)
-                => (col >= c0 && col <= c1) ? ws.Cell(row, col).GetString().Trim() : string.Empty;
+            var map = BuildHeaderMap(headers.ToArray());
 
             bool RowIsEmpty(int row)
             {
@@ -157,34 +133,48 @@ namespace OperativaLogistica.Services
                 return true;
             }
 
-            // Recorre filas de datos
+            string Get(int row, string key)
+            {
+                if (!map.TryGetValue(key, out int colIndex)) return "";
+                if (colIndex < 0) return "";
+                int c = c0 + colIndex;        // map guarda índice relativo desde c0
+                if (c < c0 || c > c1) return "";
+                return ws.Cell(row, c).GetString().Trim();
+            }
+
+            string GetFecha(int row)
+            {
+                if (!map.TryGetValue("FECHA", out int colIndex)) return "";
+                int c = c0 + colIndex;
+                if (c < c0 || c > c1) return "";
+                var cell = ws.Cell(row, c);
+                if (TryGetDateOnly(cell, out var d))
+                    return d.ToString("yyyy-MM-dd");
+                return cell.GetString().Trim();
+            }
+
             for (int r = r0 + 1; r <= r1; r++)
             {
                 if (RowIsEmpty(r)) continue;
 
-                Operacion op;
-
-                if (tieneCabecerasUtiles)
-                {
-                    // Con cabeceras reconocidas
-                    op = CreateOperacion(
-                        S(r, "ID"), S(r, "TRANSPORTISTA"), S(r, "MATRICULA"), S(r, "MUELLE"), S(r, "ESTADO"), S(r, "DESTINO"),
-                        S(r, "LLEGADA"), S(r, "LLEGADA REAL"), S(r, "SALIDA REAL"), S(r, "SALIDA TOPE"),
-                        S(r, "OBSERVACIONES"), S(r, "INCIDENCIAS"), FechaStr(r), S(r, "PRECINTO"), S(r, "LEX"), S(r, "LADO"),
-                        fechaPorDefecto, ladoPorDefecto);
-                }
-                else
-                {
-                    // Sin cabeceras o irreconocibles -> por posición (A..P)
-                    // Id, Transportista, Matricula, Muelle, Estado, Destino,
-                    // Llegada, Llegada Real, Salida Real, Salida Tope,
-                    // Observaciones, Incidencias, Fecha, Precinto, Lex, Lado
-                    op = CreateOperacion(
-                        SByIndex(r, c0 + 0),  SByIndex(r, c0 + 1),  SByIndex(r, c0 + 2),  SByIndex(r, c0 + 3),  SByIndex(r, c0 + 4),  SByIndex(r, c0 + 5),
-                        SByIndex(r, c0 + 6),  SByIndex(r, c0 + 7),  SByIndex(r, c0 + 8),  SByIndex(r, c0 + 9),
-                        SByIndex(r, c0 +10),  SByIndex(r, c0 +11),  SByIndex(r, c0 +12),  SByIndex(r, c0 +13),  SByIndex(r, c0 +14),  SByIndex(r, c0 +15),
-                        fechaPorDefecto, ladoPorDefecto);
-                }
+                var op = CreateOperacion(
+                    Get(r, "ID"),
+                    Get(r, "TRANSPORTISTA"),
+                    Get(r, "MATRICULA"),
+                    Get(r, "MUELLE"),
+                    Get(r, "ESTADO"),
+                    Get(r, "DESTINO"),
+                    Get(r, "LLEGADA"),
+                    Get(r, "LLEGADA REAL"),
+                    Get(r, "SALIDA REAL"),
+                    Get(r, "SALIDA TOPE"),
+                    Get(r, "OBSERVACIONES"),
+                    Get(r, "INCIDENCIAS"),
+                    GetFecha(r),
+                    Get(r, "PRECINTO"),
+                    Get(r, "LEX"),
+                    Get(r, "LADO"),
+                    fechaPorDefecto, ladoPorDefecto);
 
                 list.Add(op);
             }
@@ -194,17 +184,18 @@ namespace OperativaLogistica.Services
 
         private static bool TryGetDateOnly(IXLCell cell, out DateOnly d)
         {
+            // Numérico/DateTime de Excel
             if (cell.DataType == XLDataType.DateTime)
             {
                 d = DateOnly.FromDateTime(cell.GetDateTime());
                 return true;
             }
 
-            var s = cell.GetString().Trim();
-            if (DateOnly.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out d)) return true;
-            if (DateOnly.TryParseExact(s, "dd/MM/yyyy", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out d)) return true;
+            var s = (cell.GetString() ?? "").Trim();
+            if (DateOnly.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out d))
+                return true;
+            if (DateOnly.TryParseExact(s, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out d))
+                return true;
 
             if (DateTime.TryParse(s, CultureInfo.CurrentCulture, DateTimeStyles.None, out var dt))
             {
@@ -216,34 +207,117 @@ namespace OperativaLogistica.Services
             return false;
         }
 
-        // ---------------- Util común ----------------
+        // =====================================================================
+        // COMMON
+        // =====================================================================
 
-        private static string NormalizeHeader(string s)
+        /// <summary>
+        /// Normaliza una cabecera: Trim, UpperInvariant, colapsa espacios y quita acentos.
+        /// </summary>
+        private static string Norm(string? s)
         {
-            s = s.Trim().ToUpperInvariant();
-
-            // Quita tildes/acentos
-            s = s.Normalize(System.Text.NormalizationForm.FormD);
-            var sb = new System.Text.StringBuilder(s.Length);
-            foreach (var ch in s)
-            {
-                var cat = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch);
-                if (cat != System.Globalization.UnicodeCategory.NonSpacingMark)
-                    sb.Append(ch);
-            }
-            s = sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
-
-            // Sustituye no alfanum por espacios
-            sb.Clear();
-            foreach (var ch in s)
-                sb.Append(char.IsLetterOrDigit(ch) ? ch : ' ');
-            s = sb.ToString();
-
-            // Colapsa espacios
-            s = Regex.Replace(s, @"\s+", " ").Trim();
+            s ??= "";
+            s = s.Trim();
+            // colapsar espacios
+            s = string.Join(" ", s.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+            // quitar acentos y a mayúsculas
+            s = RemoveDiacritics(s).ToUpperInvariant();
             return s;
         }
 
+        private static string RemoveDiacritics(string text)
+        {
+            var norm = text.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder(capacity: norm.Length);
+            foreach (var ch in norm)
+            {
+                var uc = CharUnicodeInfo.GetUnicodeCategory(ch);
+                if (uc != UnicodeCategory.NonSpacingMark) sb.Append(ch);
+            }
+            return sb.ToString().Normalize(NormalizationForm.FormC);
+        }
+
+        /// <summary>
+        /// Construye un mapa cabecera->índice (0..N-1) sobre una lista de cabeceras normalizadas.
+        /// Tolera alias típicos y columnas faltantes (se asigna -1).
+        /// </summary>
+        private static Dictionary<string, int> BuildHeaderMap(string[] normHeaders)
+        {
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            // Primero, registra lo que venga del fichero
+            for (int i = 0; i < normHeaders.Length; i++)
+                map[normHeaders[i]] = i;
+
+            // Aliases habituales -> clave estándar
+            var alias = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // estándar -> variaciones aceptadas
+                ["ID"]               = "ID",
+                ["TRANSPORTISTA"]    = "TRANSPORTISTA",
+                ["MATRICULA"]        = "MATRICULA",          // acepta MATRÍCULA por diacríticos (ya removidos)
+                ["MUELLE"]           = "MUELLE",
+                ["ESTADO"]           = "ESTADO",
+                ["DESTINO"]          = "DESTINO",
+
+                ["LLEGADA"]          = "LLEGADA",
+                ["LLEGADA REAL"]     = "LLEGADA REAL",
+                ["SALIDA REAL"]      = "SALIDA REAL",
+                ["SALIDA TOPE"]      = "SALIDA TOPE",
+
+                ["OBSERVACIONES"]    = "OBSERVACIONES",
+                ["INCIDENCIAS"]      = "INCIDENCIAS",
+                ["FECHA"]            = "FECHA",
+
+                ["PRECINTO"]         = "PRECINTO",
+                ["LEX"]              = "LEX",
+                ["LADO"]             = "LADO",
+            };
+
+            // Para cada clave estándar, intenta localizar su índice por nombre o por variantes
+            var final = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var std in alias.Keys)
+            {
+                // si existe la estándar tal cual
+                if (TryFindIndex(normHeaders, std, out var idx))
+                {
+                    final[std] = idx;
+                    continue;
+                }
+
+                // Variaciones razonables adicionales
+                var candidates = std switch
+                {
+                    "MATRICULA"     => new[] { "MATRICULA", "MATRICULAS", "MATRICULA CAMION", "MATRICULA CAMIÓN" },
+                    "LLEGADA REAL"  => new[] { "LLEGADA REAL", "LLEGADAREAL" },
+                    "SALIDA REAL"   => new[] { "SALIDA REAL", "SALIDAREAL" },
+                    "SALIDA TOPE"   => new[] { "SALIDA TOPE", "SALIDATOPE", "SALIDA PLAN" },
+                    "OBSERVACIONES" => new[] { "OBSERVACIONES", "OBSERVACION" },
+                    "INCIDENCIAS"   => new[] { "INCIDENCIAS", "INCIDENCIA" },
+                    _               => new[] { std }
+                };
+
+                var found = candidates.FirstOrDefault(c => TryFindIndex(normHeaders, c, out _));
+                if (found != null && TryFindIndex(normHeaders, found, out var idx2))
+                    final[std] = idx2;
+                else
+                    final[std] = -1; // no existe
+            }
+
+            return final;
+
+            static bool TryFindIndex(string[] arr, string key, out int index)
+            {
+                for (int i = 0; i < arr.Length; i++)
+                    if (string.Equals(arr[i], key, StringComparison.OrdinalIgnoreCase))
+                    { index = i; return true; }
+                index = -1; return false;
+            }
+        }
+
+        // =====================================================================
+        // Crear modelo
+        // =====================================================================
         private static Operacion CreateOperacion(
             string id, string transportista, string matricula, string muelle, string estado, string destino,
             string llegada, string llegadaReal, string salidaReal, string salidaTope,
@@ -270,9 +344,10 @@ namespace OperativaLogistica.Services
             {
                 var t = (s ?? "").Trim();
                 return t.Equals("true", StringComparison.OrdinalIgnoreCase)
-                    || t.Equals("sí", StringComparison.OrdinalIgnoreCase)
-                    || t.Equals("si", StringComparison.OrdinalIgnoreCase)
-                    || t == "1" || t.Equals("x", StringComparison.OrdinalIgnoreCase);
+                       || t.Equals("sí", StringComparison.OrdinalIgnoreCase)
+                       || t.Equals("si", StringComparison.OrdinalIgnoreCase)
+                       || t.Equals("x", StringComparison.OrdinalIgnoreCase)
+                       || t == "1";
             }
 
             return new Operacion
@@ -295,7 +370,7 @@ namespace OperativaLogistica.Services
                 Fecha         = ParseFecha(fecha, fechaPorDefecto),
                 Precinto      = precinto ?? string.Empty,
                 Lex           = ParseBool(lex),
-                Lado          = string.IsNullOrWhiteSpace(lado) ? ladoPorDefecto : lado
+                Lado          = string.IsNullOrWhiteSpace(lado) ? ladoPorDefecto : lado.Trim()
             };
         }
     }
