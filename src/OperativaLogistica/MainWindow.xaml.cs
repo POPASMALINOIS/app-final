@@ -55,33 +55,31 @@ namespace OperativaLogistica
             {
                 var dlg = new OpenFileDialog
                 {
-                    Title = "Importar operativa (Excel/CSV)",
+                    Title  = "Importar operativa (Excel/CSV)",
                     Filter = "Excel/CSV (*.xlsx;*.xls;*.csv)|*.xlsx;*.xls;*.csv|Todos (*.*)|*.*"
                 };
                 if (dlg.ShowDialog() != true) return;
-
-                // Pestaña activa; si no hay, crea una
-                if (_vm.SesionActual is null)
-                    _vm.NuevaPestana();
-
-                var fecha = DateOnly.FromDateTime(_vm.FechaActual);
-                var lado = string.IsNullOrWhiteSpace(_vm.LadoSeleccionado) ? "LADO 0" : _vm.LadoSeleccionado;
-
+        
+                // Asegura que haya pestaña activa
+                if (_vm?.SesionActual is null)
+                    _vm?.NuevaPestana();
+        
+                // Fecha y lado desde el VM (con fallback por si acaso)
+                var fecha = DateOnly.FromDateTime(_vm?.FechaActual ?? DateTime.Today);
+                var lado  = string.IsNullOrWhiteSpace(_vm?.LadoSeleccionado) ? "LADO 0" : _vm!.LadoSeleccionado;
+        
                 // Importa
-                var items = _importService.Importar(dlg.FileName, fecha, lado)
-                                          ?? Enumerable.Empty<Operacion>();
-
-                // 🔹 No reasignar la colección; vaciar y añadir
-                var target = _vm.SesionActual!.Operaciones;
+                var importService = new ImportService();
+                var nuevos = importService.Importar(dlg.FileName, fecha, lado) ?? Enumerable.Empty<Operacion>();
+        
+                // 🚀 CLAVE: NO reasignar la colección -> vaciar y añadir para refrescar el DataGrid
+                var target = _vm!.SesionActual!.Operaciones;
                 target.Clear();
-                foreach (var op in items)
+                foreach (var op in nuevos)
                     target.Add(op);
-
-                // (Opcional) selecciona primera fila
-                if (target.Count > 0 && Application.Current.Windows.OfType<MainWindow>().FirstOrDefault() is { } w)
-                {
-                    // aquí podrías hacer focus al grid si lo necesitas
-                }
+        
+                MessageBox.Show(this, "Importación completada.", "Importar",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
@@ -89,6 +87,7 @@ namespace OperativaLogistica
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
 
         private void ExportCsv_Click(object sender, RoutedEventArgs e)
         {
