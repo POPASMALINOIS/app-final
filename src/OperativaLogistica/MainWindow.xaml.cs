@@ -16,6 +16,7 @@ namespace OperativaLogistica
 {
     public partial class MainWindow : Window
     {
+        // VM raíz y servicios
         private readonly MainViewModel _vm;
         private readonly ImportService _importService = new ImportService();
         private readonly DatabaseService _databaseService = new DatabaseService();
@@ -23,41 +24,17 @@ namespace OperativaLogistica
         public MainWindow()
         {
             InitializeComponent();
-            private void Import_Click(object sender, RoutedEventArgs e)
-{
-    var dlg = new Microsoft.Win32.OpenFileDialog
-    {
-        Filter = "Archivos CSV o Excel|*.csv;*.xls;*.xlsx"
-    };
 
-    if (dlg.ShowDialog() == true)
-    {
-        if (DataContext is OperativaLogistica.ViewModels.TabViewModel vm)
-        {
-            var importService = new OperativaLogistica.Services.ImportService();
-            var nuevos = importService.Importar(
-                dlg.FileName,
-                DateOnly.FromDateTime(DateTime.Today),
-                "LADO 1"
-            );
-
-            // 🔹 En lugar de sustituir la colección, la vaciamos y rellenamos
-            vm.Operaciones.Clear();
-            foreach (var op in nuevos)
-                vm.Operaciones.Add(op);
-        }
-    }
-}
-
-
+            // Usa el VM ya asignado en XAML, o crea uno.
             _vm = DataContext as MainViewModel ?? new MainViewModel();
             DataContext = _vm;
 
+            // Asegura una pestaña inicial
             if (_vm.SesionActual is null)
                 _vm.NuevaPestana();
         }
 
-        // ===============  MENÚ: Pestañas  ===============
+        // ===================== MENÚ / BOTONES =====================
 
         private void NewTab_Click(object sender, RoutedEventArgs e)
         {
@@ -69,10 +46,9 @@ namespace OperativaLogistica
             _vm.CerrarPestana();
         }
 
-        // ===============  MENÚ: Importar / Exportar / PDF  ===============
-
-        // Si en tu XAML el Click se llama distinto (p.ej. Importar_Click),
-        // cambia el nombre allí a Click="Import_Click" o renombra este método.
+        /// <summary>
+        /// IMPORTAR (Excel/CSV). No reemplaza la colección: limpia y añade para que el DataGrid refresque.
+        /// </summary>
         private void Import_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -80,27 +56,32 @@ namespace OperativaLogistica
                 var dlg = new OpenFileDialog
                 {
                     Title = "Importar operativa (Excel/CSV)",
-                    Filter = "Excel (*.xlsx;*.xls)|*.xlsx;*.xls|CSV (*.csv)|*.csv|Todos (*.*)|*.*"
+                    Filter = "Excel/CSV (*.xlsx;*.xls;*.csv)|*.xlsx;*.xls;*.csv|Todos (*.*)|*.*"
                 };
                 if (dlg.ShowDialog() != true) return;
 
+                // Pestaña activa; si no hay, crea una
                 if (_vm.SesionActual is null)
                     _vm.NuevaPestana();
 
                 var fecha = DateOnly.FromDateTime(_vm.FechaActual);
-                var lado = _vm.LadoSeleccionado ?? "LADO 0";
+                var lado = string.IsNullOrWhiteSpace(_vm.LadoSeleccionado) ? "LADO 0" : _vm.LadoSeleccionado;
 
-                var ops = _importService.Importar(dlg.FileName, fecha, lado) ?? Enumerable.Empty<Operacion>();
+                // Importa
+                var items = _importService.Importar(dlg.FileName, fecha, lado)
+                                          ?? Enumerable.Empty<Operacion>();
 
-                // 🚫 NO reasignar la colección.
-                // ✅ Vaciar y añadir para que el DataGrid se refresque al instante.
-                var target = _vm.SesionActual!;
-                target.Operaciones.Clear();
-                foreach (var o in ops)
-                    target.Operaciones.Add(o);
+                // 🔹 No reasignar la colección; vaciar y añadir
+                var target = _vm.SesionActual!.Operaciones;
+                target.Clear();
+                foreach (var op in items)
+                    target.Add(op);
 
-                MessageBox.Show(this, "Importación completada.", "Importar",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                // (Opcional) selecciona primera fila
+                if (target.Count > 0 && Application.Current.Windows.OfType<MainWindow>().FirstOrDefault() is { } w)
+                {
+                    // aquí podrías hacer focus al grid si lo necesitas
+                }
             }
             catch (Exception ex)
             {
@@ -159,7 +140,7 @@ namespace OperativaLogistica
                 if (dlg.ShowDialog() != true) return;
 
                 var fecha = DateOnly.FromDateTime(_vm.FechaActual);
-                var lado = _vm.LadoSeleccionado ?? "LADO 0";
+                var lado = string.IsNullOrWhiteSpace(_vm.LadoSeleccionado) ? "LADO 0" : _vm.LadoSeleccionado;
 
                 _vm.PdfService.SaveJornadaPdf(dlg.FileName, _vm.SesionActual.Operaciones, fecha, lado);
                 MessageBox.Show(this, "PDF generado correctamente.", "Guardar PDF",
@@ -171,8 +152,6 @@ namespace OperativaLogistica
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-        // ===============  MENÚ: Jornada  ===============
 
         private void NewDay_Click(object sender, RoutedEventArgs e)
         {
@@ -209,16 +188,16 @@ namespace OperativaLogistica
                 "Acerca de", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
-        // ===============  “Hook” de columnas (no-op seguro)  ===============
-        // Si en tu XAML tenías algo como DataGrid.ColumnWidthChanged,
-        // cámbialo por DataGrid_ColumnWidthChanged (este método existe).
-        private void DataGrid_ColumnWidthChanged(object? sender, EventArgs e)
+        /// <summary>
+        /// Hook opcional por si en XAML está enganchado a DataGrid.ColumnWidthChanged.
+        /// </summary>
+        private void DataGrid_ColumnWidthChanged(object sender, DataGridColumnEventArgs e)
         {
-            // No-op. Si quieres, aquí podrías persistir layout de columnas.
-            // Ej: _vm.Config.SaveColumnLayout("principal", (DataGrid)sender!);
+            // Si algún día quieres guardar layout:
+            // _vm.Config.SaveColumnLayout("principal", (DataGrid)sender);
         }
 
-        // ===============  Utilidades  ===============
+        // ===================== UTILIDADES =====================
 
         private static void ExportarCsv(string filePath, IEnumerable<Operacion> ops)
         {
@@ -232,10 +211,10 @@ namespace OperativaLogistica
             using var sw = new StreamWriter(filePath, false, Encoding.UTF8);
             sw.WriteLine(string.Join(";", headers));
 
+            static string S(object? v) => (v?.ToString() ?? "").Replace(';', ',');
+
             foreach (var o in ops)
             {
-                static string S(object? v) => (v?.ToString() ?? "").Replace(';', ',');
-
                 var line = string.Join(";",
                     S(o.Id),
                     S(o.Transportista),
@@ -249,7 +228,7 @@ namespace OperativaLogistica
                     S(o.SalidaTope),
                     S(o.Observaciones),
                     S(o.Incidencias),
-                    S(o.Fecha),
+                    S(o.Fecha),      // DateOnly ToString() -> cultura actual; ajusta si quieres yyyy-MM-dd
                     S(o.Precinto),
                     S(o.Lex),
                     S(o.Lado)
