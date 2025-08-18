@@ -1,79 +1,83 @@
 <Window x:Class="OperativaLogistica.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Operativa Logística" Height="800" Width="1400">
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Operativa Logística" Height="900" Width="1500">
+
     <DockPanel>
 
-        <!-- Menú simple (usa los mismos handlers del code-behind) -->
+        <!-- Barra de menú (opcional, ajústala según lo que ya tenías) -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_Archivo">
-                <MenuItem Header="Importar..." Click="Import_Click"/>
-                <MenuItem Header="Exportar CSV..." Click="ExportCsv_Click"/>
+                <MenuItem Header="Nueva pestaña" Click="NewTab_Click"/>
+                <MenuItem Header="Cerrar pestaña" Click="CloseTab_Click"/>
                 <Separator/>
-                <MenuItem Header="Guardar PDF..." Click="SavePdf_Click"/>
+                <MenuItem Header="Importar…" Click="Import_Click"/>
+                <MenuItem Header="Exportar CSV…" Click="ExportCsv_Click"/>
+                <MenuItem Header="Guardar PDF…" Click="SavePdf_Click"/>
+                <Separator/>
+                <MenuItem Header="Nueva jornada…" Click="NewDay_Click"/>
                 <Separator/>
                 <MenuItem Header="Salir" Click="Exit_Click"/>
             </MenuItem>
-            <MenuItem Header="_Jornada">
-                <MenuItem Header="Nueva jornada" Click="NewDay_Click"/>
-            </MenuItem>
-            <MenuItem Header="_Pestañas">
-                <MenuItem Header="Nueva pestaña" Click="NewTab_Click"/>
-                <MenuItem Header="Cerrar pestaña" Click="CloseTab_Click"/>
-            </MenuItem>
             <MenuItem Header="_Ayuda">
-                <MenuItem Header="Acerca de..." Click="About_Click"/>
+                <MenuItem Header="Acerca de…" Click="About_Click"/>
             </MenuItem>
         </Menu>
 
-        <!-- GRID PRINCIPAL -->
-        <DataGrid x:Name="dg"
+        <!-- DataGrid principal -->
+        <DataGrid x:Name="dgOperaciones"
                   ItemsSource="{Binding SesionActual.Operaciones}"
                   AutoGenerateColumns="False"
                   CanUserAddRows="False"
-                  CanUserDeleteRows="False"
+                  CanUserDeleteRows="True"
                   IsReadOnly="False"
-                  SelectionMode="Extended"
-                  SelectionUnit="FullRow"
-                  Loaded="DataGrid_Loaded"
-                  Unloaded="DataGrid_Unloaded"
-                  ColumnReordered="DataGrid_ColumnReordered"
-                  SizeChanged="DataGrid_SizeChanged">
-        
-            <!-- Tus columnas existentes aquí -->
-            <!-- ... -->
-        </DataGrid>
+                  DockPanel.Dock="Top"
+                  Margin="6"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="All">
 
+            <!-- Hook equivalente a ColumnWidthChanged: sobre el header -->
+            <DataGrid.Resources>
+                <Style TargetType="DataGridColumnHeader">
+                    <EventSetter Event="SizeChanged" Handler="DataGrid_ColumnWidthChanged"/>
+                </Style>
+            </DataGrid.Resources>
 
-            <!-- Columnas explícitas (encabezado = propiedad) -->
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Id"            Binding="{Binding Id}" />
-                <DataGridTextColumn Header="Transportista" Binding="{Binding Transportista}" Width="200"/>
-                <DataGridTextColumn Header="Matricula"     Binding="{Binding Matricula}" />
-                <DataGridTextColumn Header="Muelle"        Binding="{Binding Muelle}" />
-                <DataGridTextColumn Header="Estado"        Binding="{Binding Estado}" />
-                <DataGridTextColumn Header="Destino"       Binding="{Binding Destino}" Width="220" />
 
-                <DataGridTextColumn Header="Llegada"       Binding="{Binding Llegada}" />
-                <DataGridTextColumn Header="LlegadaReal"   Binding="{Binding LlegadaReal}" />
-                <DataGridTextColumn Header="SalidaReal"    Binding="{Binding SalidaReal}" />
-                <DataGridTextColumn Header="SalidaTope"    Binding="{Binding SalidaTope}" />
+                <!-- Ordena/ajusta los DisplayIndex y Width a tu gusto -->
+                <DataGridTextColumn Binding="{Binding Id}" Header="Id" Width="60" />
+                <DataGridTextColumn Binding="{Binding Transportista}" Header="Transportista" Width="220" />
+                <DataGridTextColumn Binding="{Binding Matricula}" Header="Matricula" Width="110" />
+                <DataGridTextColumn Binding="{Binding Muelle}" Header="Muelle" Width="90" />
+                <DataGridTextColumn Binding="{Binding Estado}" Header="Estado" Width="110" />
+                <DataGridTextColumn Binding="{Binding Destino}" Header="Destino" Width="220" />
 
-                <DataGridTextColumn Header="Observaciones" Binding="{Binding Observaciones}" Width="*" />
-                <DataGridTextColumn Header="Incidencias"   Binding="{Binding Incidencias}" Width="*" />
+                <DataGridTextColumn Binding="{Binding Llegada}" Header="Llegada" Width="110" />
+                <DataGridTextColumn Binding="{Binding LlegadaReal}" Header="LlegadaReal" Width="110" />
+                <DataGridTextColumn Binding="{Binding SalidaReal}" Header="SalidaReal" Width="110" />
+                <DataGridTextColumn Binding="{Binding SalidaTope}" Header="SalidaTope" Width="110" />
 
-                <DataGridTextColumn Header="Fecha"         Binding="{Binding Fecha}" />
-                <DataGridTextColumn Header="Precinto"      Binding="{Binding Precinto}" />
+                <DataGridTextColumn Binding="{Binding Observaciones}" Header="Observaciones" Width="300" />
+                <DataGridTextColumn Binding="{Binding Incidencias}" Header="Incidencias" Width="240" />
 
-                <!-- Lex como bool para evitar cadenas raras -->
-                <DataGridCheckBoxColumn Header="Lex"       Binding="{Binding Lex}" />
+                <!-- Fecha (DateOnly) se muestra con ToString() por defecto; si quieres formato, usa StringFormat -->
+                <DataGridTextColumn Binding="{Binding Fecha, StringFormat=\{0:yyyy-MM-dd\}}" Header="Fecha" Width="120" />
 
-                <!-- Lado: ItemsSource = lista de strings / SelectedItem = string -->
+                <DataGridTextColumn Binding="{Binding Precinto}" Header="Precinto" Width="120" />
+
+                <!-- Lex (bool) como CheckBox -->
+                <DataGridCheckBoxColumn Binding="{Binding Lex}" Header="Lex" Width="60" />
+
+                <!-- Lado como ComboBox (ItemsSource = Config.Lados; SelectedItem = Operacion.Lado) -->
                 <DataGridComboBoxColumn Header="Lado"
-                                        ItemsSource="{Binding DataContext.Config.Lados, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        SelectedItemBinding="{Binding Lado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        Width="140"
+                                        SelectedItemBinding="{Binding Lado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        ItemsSource="{Binding DataContext.Config.Lados, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
             </DataGrid.Columns>
         </DataGrid>
-
     </DockPanel>
 </Window>
