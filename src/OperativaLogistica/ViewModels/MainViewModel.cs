@@ -11,17 +11,14 @@ using OperativaLogistica.Services;
 namespace OperativaLogistica.ViewModels
 {
     /// <summary>
-    /// VM raíz de la aplicación. Expone todas las propiedades/métodos que
-    /// el XAML y el code-behind están intentando usar (según tus logs de build).
+    /// VM raíz de la aplicación.
     /// </summary>
     public class MainViewModel : INotifyPropertyChanged
     {
         // ========= Eventos =========
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        // ========= Servicios expuestos (para que compile todo el XAML/CodeBehind) =========
-        // Si ya los tienes implementados en tu proyecto, estos getters solo referencian a los tuyos.
-        // Si no existen, crea stubs con esos nombres en OperativaLogistica.Services.
+        // ========= Servicios =========
         public ConfigService Config { get; } = new ConfigService();
         public PdfService PdfService { get; } = new PdfService();
 
@@ -50,7 +47,7 @@ namespace OperativaLogistica.ViewModels
             set { _sesionActual = value; OnPropertyChanged(); }
         }
 
-        // ========= Comandos opcionales =========
+        // ========= Comandos =========
         public ICommand NuevaPestanaCommand { get; }
         public ICommand CerrarPestanaCommand { get; }
         public ICommand SaveJornadaPdfCommand { get; }
@@ -66,7 +63,7 @@ namespace OperativaLogistica.ViewModels
             SaveJornadaPdfCommand = new RelayCommand(_ => SaveJornadaPdf(), _ => SesionActual != null);
         }
 
-        // ========= Métodos que el XAML/CodeBehind están esperando =========
+        // ========= Métodos expuestos =========
 
         /// <summary> Crea una nueva pestaña en blanco y la activa. </summary>
         public void NuevaPestana() => NuevaPestanaCore();
@@ -81,23 +78,19 @@ namespace OperativaLogistica.ViewModels
         }
 
         /// <summary>
-        /// Guardar PDF de la jornada actual. El CodeBehind puede llamar a PdfService directamente,
-        /// pero dejamos aquí el método para bindings que lo invoquen.
+        /// Punto de entrada si alguna acción quiere invocar el guardado PDF desde el VM.
+        /// (El guardado real lo haces con diálogo en el code-behind usando PdfService).
         /// </summary>
         public void SaveJornadaPdf()
         {
-            // Punto de entrada opcional si quieres lanzar la exportación desde un Command.
-            // El SavePdf_Click del code-behind ya usa PdfService.SaveJornadaPdf(file, ops, fecha, lado).
-            // Aquí no forzamos ruta para no interferir con el guardado vía diálogo.
+            // Intencionadamente vacío (compatibilidad con bindings/comandos).
         }
 
         /// <summary>
-        /// Métodos placeholders para bindings que hacen referencia a "Config" u "Operaciones" como acción.
-        /// No realizan lógica, pero evitan errores del compilador si el XAML los invoca.
+        /// Placeholder por compatibilidad si tu XAML hace referencia a "Operaciones"
+        /// como acción (no interfiere con la propiedad Operaciones de TabViewModel).
         /// </summary>
-        public void Config() { /* placeholder por compatibilidad */ }
-
-        public void Operaciones() { /* placeholder por compatibilidad */ }
+        public void Operaciones() { /* placeholder */ }
 
         // ========= Helpers internos =========
 
@@ -107,7 +100,6 @@ namespace OperativaLogistica.ViewModels
             var tab = new TabViewModel
             {
                 Titulo = titulo,
-                // Arrancamos con lista vacía
                 Operaciones = new ObservableCollection<Operacion>()
             };
             Pestanas.Add(tab);
@@ -119,8 +111,7 @@ namespace OperativaLogistica.ViewModels
     }
 
     /// <summary>
-    /// VM de cada pestaña. Debe exponer Operaciones para que el XAML
-    /// pueda bindear ItemsSource="{Binding Operaciones}" sin error.
+    /// VM de cada pestaña.
     /// </summary>
     public class TabViewModel : INotifyPropertyChanged
     {
@@ -139,7 +130,7 @@ namespace OperativaLogistica.ViewModels
     }
 
     /// <summary>
-    /// RelayCommand muy simple para usar comandos en el VM.
+    /// RelayCommand simple para comandos en el VM.
     /// </summary>
     public class RelayCommand : ICommand
     {
