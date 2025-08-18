@@ -1,5 +1,30 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+
+// Alias para que el atributo [RelayCommand] use el del Toolkit
+using RelayCommand = CommunityToolkit.Mvvm.Input.RelayCommandAttribute;
+
+namespace OperativaLogistica.ViewModels
+{
+    // Debe ser partial + heredar de ObservableObject
+    public partial class SessionViewModel : ObservableObject
+    {
+        // Aquí continúan tus propiedades y métodos actuales.
+        // Ejemplo de uso correcto con el Toolkit:
+        //
+        // [ObservableProperty]
+        // private string? usuario;
+        //
+        // [RelayCommand]
+        // private void IniciarSesion()
+        // {
+        //     // lógica...
+        // }
+    }
+}
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using OperativaLogistica.Models;
 using OperativaLogistica.Services;
 using System;
