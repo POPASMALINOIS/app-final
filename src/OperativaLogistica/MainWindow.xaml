@@ -104,35 +104,37 @@
                                 <DataGridTextColumn Header="DESTINO" Binding="{Binding Destino}" Width="200"/>
                                 <DataGridTextColumn Header="LLEGADA" Binding="{Binding Llegada}" Width="80"/>
 
-                                <!-- LLEGADA REAL -->
+                               <!-- LLEGADA REAL -->
                                 <DataGridTemplateColumn Header="LLEGADA REAL" Width="160">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding LlegadaReal}" Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                                <Button Content="⏱" Width="32"
-                                                        Command="{Binding DataContext.MarkLlegadaCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
-                                                        CommandParameter="{Binding .}"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
+                                  <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                      <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding LlegadaReal}"
+                                                   Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <Button Content="⏱" Width="32"
+                                                Command="{Binding DataContext.MarkLlegadaCommand, ElementName=GridOps}"
+                                                CommandParameter="{Binding .}"/>
+                                      </StackPanel>
+                                    </DataTemplate>
+                                  </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-
+                                
                                 <!-- SALIDA REAL -->
                                 <DataGridTemplateColumn Header="SALIDA REAL" Width="160">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding SalidaReal}" Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                                <Button Content="⏱" Width="32"
-                                                        Command="{Binding DataContext.MarkSalidaCommand, RelativeSource={RelativeSource AncestorType=TabControl}}"
-                                                        CommandParameter="{Binding .}"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
+                                  <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                      <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding SalidaReal}"
+                                                   Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <Button Content="⏱" Width="32"
+                                                Command="{Binding DataContext.MarkSalidaCommand, ElementName=GridOps}"
+                                                CommandParameter="{Binding .}"/>
+                                      </StackPanel>
+                                    </DataTemplate>
+                                  </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTextColumn Header="SALIDA TOPE" Binding="{Binding SalidaTope}" Width="90"/>
+                                 <DataGridTextColumn Header="SALIDA TOPE" Binding="{Binding SalidaTope}" Width="90"/>
                                 <DataGridTextColumn Header="OBSERVACIONES" Binding="{Binding Observaciones}" Width="250"/>
 
                                 <!-- INCIDENCIAS desplegable (rojo) -->
