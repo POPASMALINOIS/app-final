@@ -5,73 +5,104 @@ using System.Text.Json;
 
 namespace OperativaLogistica.Services
 {
+    /// <summary>
+    /// Servicio muy simple de configuración persistida en JSON.
+    /// Carpeta: Escritorio\APP OPERATIVAS\config.json
+    /// Contenido: anchos de columna, colores por estado, etc.
+    /// </summary>
     public class ConfigService
     {
-        public Dictionary<string, string> Mapping { get; set; } = new();
+        private const string AppFolderName = "APP OPERATIVAS";
+        private const string ConfigFileName = "config.json";
 
-        public Dictionary<string, string> EstadoColors { get; set; } = new()
+        private readonly string _appFolderPath;
+        private readonly string _configPath;
+
+        private ConfigDto _config = new ConfigDto();
+
+        public ConfigService()
         {
-            ["OK"] = "#FF2E7D32",
-            ["CARGANDO"] = "#FFFFA000",
-            ["ANULADO"] = "#FFB71C1C"
-        };
-
-        public Dictionary<string, string> MuelleColors { get; set; } = new();
-
-        public Dictionary<string, double> ColumnWidths { get; set; } = new();
-
-        public static ConfigService LoadOrCreate()
-        {
-            AppPaths.Ensure();
-            var cfg = new ConfigService();
-
-            if (File.Exists(AppPaths.MappingJson))
-            {
-                try
-                {
-                    var json = File.ReadAllText(AppPaths.MappingJson);
-                    var map = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
-                    if (map != null) cfg.Mapping = map;
-                }
-                catch { }
-            }
-
-            if (File.Exists(AppPaths.ColorsJson))
-            {
-                try
-                {
-                    var json = File.ReadAllText(AppPaths.ColorsJson);
-                    var tmp = JsonSerializer.Deserialize<ConfigService>(json);
-                    if (tmp != null)
-                    {
-                        if (tmp.EstadoColors?.Count > 0) cfg.EstadoColors = tmp.EstadoColors;
-                        if (tmp.MuelleColors != null) cfg.MuelleColors = tmp.MuelleColors;
-                    }
-                }
-                catch { }
-            }
-
-            if (File.Exists(AppPaths.ColumnLayoutJson))
-            {
-                try
-                {
-                    var json = File.ReadAllText(AppPaths.ColumnLayoutJson);
-                    var widths = JsonSerializer.Deserialize<Dictionary<string, double>>(json);
-                    if (widths != null) cfg.ColumnWidths = widths;
-                }
-                catch { }
-            }
-
-            return cfg;
+            _appFolderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), AppFolderName);
+            _configPath = Path.Combine(_appFolderPath, ConfigFileName);
+            Directory.CreateDirectory(_appFolderPath);
+            Load();
         }
 
-        public void SaveMapping() =>
-            File.WriteAllText(AppPaths.MappingJson, JsonSerializer.Serialize(Mapping, new JsonSerializerOptions { WriteIndented = true }));
+        public IReadOnlyDictionary<string, double> ColumnWidths => _config.ColumnWidths;
+        public IReadOnlyDictionary<string, string> EstadoColors => _config.EstadoColors;
 
-        public void SaveColors() =>
-            File.WriteAllText(AppPaths.ColorsJson, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        public void SetColumnWidth(string columnKey, double width)
+        {
+            if (string.IsNullOrWhiteSpace(columnKey)) return;
+            _config.ColumnWidths[columnKey] = width;
+            Save();
+        }
 
-        public void SaveColumnLayout() =>
-            File.WriteAllText(AppPaths.ColumnLayoutJson, JsonSerializer.Serialize(ColumnWidths, new JsonSerializerOptions { WriteIndented = true }));
+        public double GetColumnWidth(string columnKey, double fallback = 120)
+        {
+            if (string.IsNullOrWhiteSpace(columnKey)) return fallback;
+            return _config.ColumnWidths.TryGetValue(columnKey, out var w) ? w : fallback;
+        }
+
+        public void SetEstadoColor(string estado, string colorHex)
+        {
+            if (string.IsNullOrWhiteSpace(estado)) return;
+            _config.EstadoColors[estado] = colorHex;
+            Save();
+        }
+
+        public string GetEstadoColor(string estado, string fallback = "#FFFFFF")
+        {
+            if (string.IsNullOrWhiteSpace(estado)) return fallback;
+            return _config.EstadoColors.TryGetValue(estado, out var c) ? c : fallback;
+        }
+
+        public void Save()
+        {
+            var json = JsonSerializer.Serialize(_config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_configPath, json);
+        }
+
+        public void Load()
+        {
+            try
+            {
+                if (File.Exists(_configPath))
+                {
+                    var json = File.ReadAllText(_configPath);
+                    _config = JsonSerializer.Deserialize<ConfigDto>(json) ?? new ConfigDto();
+                }
+                else
+                {
+                    // Valores por defecto
+                    _config = new ConfigDto
+                    {
+                        EstadoColors = new Dictionary<string, string>
+                        {
+                            // Config colores por defecto
+                            ["CARGANDO"] = "#FFF59D",
+                            ["OK"]       = "#C8E6C9",
+                            ["ANULADO"]  = "#FFCDD2",
+                            ["RETRASO TRANSPORTISTA"] = "#FFCDD2",
+                            ["RETRASO DOCUMENTACION"] = "#FFCDD2",
+                            ["INCIDENCIA REMOLQUE"]   = "#FFCDD2",
+                            ["SIN INCIDENCIAS"]       = "#FFFFFF"
+                        }
+                    };
+                    Save();
+                }
+            }
+            catch
+            {
+                // Si hay problema leyendo JSON, usamos defaults
+                _config = new ConfigDto();
+            }
+        }
+
+        private sealed class ConfigDto
+        {
+            public Dictionary<string, double> ColumnWidths { get; set; } = new();
+            public Dictionary<string, string> EstadoColors { get; set; } = new();
+        }
     }
 }
