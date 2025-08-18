@@ -10,13 +10,7 @@ namespace OperativaLogistica.Services
     public class ImportService
     {
         /// <summary>
-        /// Importa operaciones desde un archivo:
-        ///  - CSV con separador ';'
-        ///  - Excel (XLS/XLSX) con cabeceras en la primera fila
-        /// Cabeceras admitidas (case-insensitive):
-        /// Id, Transportista, Matricula, Muelle, Estado, Destino,
-        /// Llegada, Llegada Real, Salida Real, Salida Tope,
-        /// Observaciones, Incidencias, Fecha, Precinto, Lex, Lado
+        /// Importa operaciones desde CSV (;) o Excel (XLS/XLSX).
         /// </summary>
         public IEnumerable<Operacion> Importar(string filePath, DateOnly fecha, string lado)
         {
@@ -30,8 +24,9 @@ namespace OperativaLogistica.Services
             };
         }
 
-        // ---------------- CSV ----------------
-
+        // =====================================================================
+        // CSV
+        // =====================================================================
         private static IEnumerable<Operacion> ImportCsv(string filePath, DateOnly fechaPorDefecto, string ladoPorDefecto)
         {
             var list = new List<Operacion>();
@@ -54,8 +49,9 @@ namespace OperativaLogistica.Services
             return list;
         }
 
-        // ---------------- Excel (ClosedXML) ----------------
-
+        // =====================================================================
+        // Excel (ClosedXML) — robusto para cabeceras en filas 1..10 y alias
+        // =====================================================================
         private static IEnumerable<Operacion> ImportExcel(string filePath, DateOnly fechaPorDefecto, string ladoPorDefecto)
         {
             var list = new List<Operacion>();
@@ -65,40 +61,59 @@ namespace OperativaLogistica.Services
             var ws = wb.Worksheets.Count > 0 ? wb.Worksheet(1) : null;
             if (ws == null) return list;
 
-            var used = ws.RangeUsed();
-            if (used is null) return list;
+            // 1) Detectar la fila de cabeceras buscando TRANSPORTISTA/MATRICULA
+            int headerRow = FindHeaderRow(ws);
+            if (headerRow == -1) return list; // no reconocido
 
-            // límites del rango usado (1-based)
-            int r0 = used.FirstRow().RowNumber();
-            int c0 = used.FirstColumn().ColumnNumber();
-            int r1 = used.LastRow().RowNumber();
-            int c1 = used.LastColumn().ColumnNumber();
+            // 2) Delimitar el rango útil por columnas con datos a partir de la cabecera
+            int c0 = FirstUsedColumn(ws, headerRow);
+            int c1 = LastUsedColumn(ws, headerRow);
+            if (c0 == -1 || c1 == -1) return list;
 
-            // Mapa de cabeceras -> columna
-            var map = BuildHeaderMap(ws, r0, c0, c1);
+            // 3) Construir mapa de cabeceras (con alias)
+            var map = BuildHeaderMap(ws, headerRow, c0, c1);
 
-            // Recorre filas de datos
-            for (int r = r0 + 1; r <= r1; r++)
+            // 4) Recorrer filas de datos
+            int lastRow = ws.LastRowUsed()?.RowNumber() ?? ws.LastRowUsed().RowNumber();
+            for (int r = headerRow + 1; r <= lastRow; r++)
             {
                 if (RowIsEmpty(ws, r, c0, c1)) continue;
 
+                string GetStr(string header)
+                {
+                    if (!map.TryGetValue(header, out int c)) return "";
+                    if (c < c0 || c > c1) return "";
+                    return ws.Cell(r, c).GetString().Trim();
+                }
+
+                string GetFecha()
+                {
+                    if (!map.TryGetValue("FECHA", out int c)) return "";
+                    if (c < c0 || c > c1) return "";
+                    var cell = ws.Cell(r, c);
+                    if (TryGetDateOnly(cell, out var d))
+                        return d.ToString("yyyy-MM-dd");
+                    return cell.GetString().Trim();
+                }
+
+                // Construir la operación. NOTA: en tu Excel “SALIDA” lo mapeamos a “SALIDA REAL”.
                 var op = CreateOperacion(
-                    GetStr(ws, r, map, "ID"),
-                    GetStr(ws, r, map, "TRANSPORTISTA"),
-                    GetStr(ws, r, map, "MATRICULA"),
-                    GetStr(ws, r, map, "MUELLE"),
-                    GetStr(ws, r, map, "ESTADO"),
-                    GetStr(ws, r, map, "DESTINO"),
-                    GetStr(ws, r, map, "LLEGADA"),
-                    GetStr(ws, r, map, "LLEGADA REAL"),
-                    GetStr(ws, r, map, "SALIDA REAL"),
-                    GetStr(ws, r, map, "SALIDA TOPE"),
-                    GetStr(ws, r, map, "OBSERVACIONES"),
-                    GetStr(ws, r, map, "INCIDENCIAS"),
-                    GetFechaStr(ws, r, map, "FECHA"),
-                    GetStr(ws, r, map, "PRECINTO"),
-                    GetStr(ws, r, map, "LEX"),
-                    GetStr(ws, r, map, "LADO"),
+                    GetStr("ID"),
+                    GetStr("TRANSPORTISTA"),
+                    GetStr("MATRICULA"),
+                    GetStr("MUELLE"),
+                    GetStr("ESTADO"),
+                    GetStr("DESTINO"),
+                    GetStr("LLEGADA"),
+                    GetStr("LLEGADA REAL"),
+                    GetStr("SALIDA REAL"),
+                    GetStr("SALIDA TOPE"),
+                    GetStr("OBSERVACIONES"),
+                    GetStr("INCIDENCIAS"),
+                    GetFecha(),
+                    GetStr("PRECINTO"),
+                    GetStr("LEX"),
+                    GetStr("LADO"),
                     fechaPorDefecto, ladoPorDefecto);
 
                 list.Add(op);
@@ -107,7 +122,44 @@ namespace OperativaLogistica.Services
             return list;
         }
 
-        // ---------------- Helpers Excel ----------------
+        // ---------------- helpers Excel ----------------
+
+        /// <summary>Busca la fila (1..10) que contenga al menos TRANSPORTISTA o MATRICULA.</summary>
+        private static int FindHeaderRow(IXLWorksheet ws)
+        {
+            int maxRow = Math.Min(10, ws.LastRowUsed()?.RowNumber() ?? 10);
+            for (int r = 1; r <= maxRow; r++)
+            {
+                bool foundTransportista = false;
+                bool foundMatricula = false;
+
+                var row = ws.Row(r);
+                foreach (var cell in row.CellsUsed())
+                {
+                    var s = (cell.GetString() ?? "").Trim().ToUpperInvariant();
+                    if (s == "TRANSPORTISTA") foundTransportista = true;
+                    if (s == "MATRICULA" || s == "MATRÍCULA") foundMatricula = true;
+                    if (foundTransportista && foundMatricula) return r;
+                }
+            }
+            return -1;
+        }
+
+        private static int FirstUsedColumn(IXLWorksheet ws, int headerRow)
+        {
+            var cells = ws.Row(headerRow).CellsUsed();
+            int min = int.MaxValue;
+            foreach (var c in cells) min = Math.Min(min, c.Address.ColumnNumber);
+            return min == int.MaxValue ? -1 : min;
+        }
+
+        private static int LastUsedColumn(IXLWorksheet ws, int headerRow)
+        {
+            var cells = ws.Row(headerRow).CellsUsed();
+            int max = -1;
+            foreach (var c in cells) max = Math.Max(max, c.Address.ColumnNumber);
+            return max;
+        }
 
         private static Dictionary<string, int> BuildHeaderMap(IXLWorksheet ws, int headerRow, int c0, int c1)
         {
@@ -115,27 +167,28 @@ namespace OperativaLogistica.Services
 
             for (int c = c0; c <= c1; c++)
             {
-                var raw = ws.Cell(headerRow, c).GetString()?.Trim() ?? "";
+                var raw = ws.Cell(headerRow, c).GetString()?.Trim();
                 if (string.IsNullOrEmpty(raw)) continue;
 
-                var key = raw.ToUpperInvariant().Trim();
+                var key = raw.ToUpperInvariant();
 
-                // Alias
+                // Normalización / alias típicos
                 key = key switch
                 {
-                    "MATRÍCULA" => "MATRICULA",
-                    "ID"        => "ID",
-                    "TRANSPORTISTA" => "TRANSPORTISTA",
-                    "LLEGADA REAL"  => "LLEGADA REAL",
-                    "SALIDA REAL"   => "SALIDA REAL",
-                    "SALIDA TOPE"   => "SALIDA TOPE",
-                    _ => key
+                    "MATRÍCULA"        => "MATRICULA",
+                    "LLEGADA REAL"     => "LLEGADA REAL",
+                    "SALIDA REAL"      => "SALIDA REAL",
+                    "SALIDA TOPE"      => "SALIDA TOPE",
+                    "SALIDA"           => "SALIDA REAL",   // en tu Excel
+                    "LLEGADA"          => "LLEGADA",
+                    "REMOLQUE"         => "REMOLQUE",      // no se usa en el modelo, pero lo dejamos por si
+                    _                  => key
                 };
 
                 dict[key] = c;
             }
 
-            // Asegura claves esperadas
+            // Claves esperadas; si falta alguna la dejamos como “no existe” (-1)
             string[] expected =
             {
                 "ID","TRANSPORTISTA","MATRICULA","MUELLE","ESTADO","DESTINO",
@@ -147,27 +200,10 @@ namespace OperativaLogistica.Services
             return dict;
         }
 
-        private static string GetStr(IXLWorksheet ws, int row, Dictionary<string, int> map, string header)
-        {
-            if (!map.TryGetValue(header, out int c)) return "";
-            if (c < 0) return "";
-            return ws.Cell(row, c).GetString().Trim();
-        }
-
-        private static string GetFechaStr(IXLWorksheet ws, int row, Dictionary<string, int> map, string header)
-        {
-            if (!map.TryGetValue(header, out int c)) return "";
-            if (c < 0) return "";
-            var cell = ws.Cell(row, c);
-            if (TryGetDateOnly(cell, out var d))
-                return d.ToString("yyyy-MM-dd");
-            return cell.GetString().Trim();
-        }
-
-        private static bool RowIsEmpty(IXLWorksheet ws, int row, int c0, int c1)
+        private static bool RowIsEmpty(IXLWorksheet ws, int r, int c0, int c1)
         {
             for (int c = c0; c <= c1; c++)
-                if (!string.IsNullOrWhiteSpace(ws.Cell(row, c).GetString()))
+                if (!string.IsNullOrWhiteSpace(ws.Cell(r, c).GetString()))
                     return false;
             return true;
         }
@@ -196,8 +232,9 @@ namespace OperativaLogistica.Services
             return false;
         }
 
-        // ---------------- Util común ----------------
-
+        // =====================================================================
+        // Util común
+        // =====================================================================
         private static Operacion CreateOperacion(
             string id, string transportista, string matricula, string muelle, string estado, string destino,
             string llegada, string llegadaReal, string salidaReal, string salidaTope,
@@ -238,10 +275,10 @@ namespace OperativaLogistica.Services
                 Estado        = estado ?? string.Empty,
                 Destino       = destino ?? string.Empty,
 
-                Llegada       = llegada ?? string.Empty,
-                LlegadaReal   = llegadaReal ?? string.Empty,
-                SalidaReal    = salidaReal ?? string.Empty,
-                SalidaTope    = salidaTope ?? string.Empty,
+                Llegada       = FormateaHora(llegada),
+                LlegadaReal   = FormateaHora(llegadaReal),
+                SalidaReal    = FormateaHora(salidaReal),
+                SalidaTope    = FormateaHora(salidaTope),
 
                 Observaciones = observaciones ?? string.Empty,
                 Incidencias   = incidencias ?? string.Empty,
@@ -251,6 +288,18 @@ namespace OperativaLogistica.Services
                 Lex           = ParseBool(lex),
                 Lado          = string.IsNullOrWhiteSpace(lado) ? ladoPorDefecto : lado
             };
+        }
+
+        private static string FormateaHora(string s)
+        {
+            var t = (s ?? "").Trim();
+            // Si ya viene como 08:00:00 o 8:00 => normalizamos a HH:mm
+            if (TimeSpan.TryParse(t, CultureInfo.CurrentCulture, out var ts))
+                return new DateTime(1, 1, 1, ts.Hours, ts.Minutes, 0).ToString("HH:mm");
+            if (DateTime.TryParse(t, CultureInfo.CurrentCulture, DateTimeStyles.None, out var dt))
+                return dt.ToString("HH:mm");
+
+            return t;
         }
     }
 }
