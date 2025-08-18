@@ -34,9 +34,16 @@
                   CanUserDeleteRows="False"
                   IsReadOnly="False"
                   SelectionMode="Extended"
-                  SelectionUnit="FullRow">
-            <!-- …tus columnas aquí… -->
+                  SelectionUnit="FullRow"
+                  Loaded="DataGrid_Loaded"
+                  Unloaded="DataGrid_Unloaded"
+                  ColumnReordered="DataGrid_ColumnReordered"
+                  SizeChanged="DataGrid_SizeChanged">
+        
+            <!-- Tus columnas existentes aquí -->
+            <!-- ... -->
         </DataGrid>
+
 
             <!-- Columnas explícitas (encabezado = propiedad) -->
             <DataGrid.Columns>
