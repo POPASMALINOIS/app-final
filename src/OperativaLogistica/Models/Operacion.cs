@@ -1,33 +1,29 @@
 using System;
-using System.ComponentModel;
 
 namespace OperativaLogistica.Models
 {
     public class Operacion
     {
-        [Browsable(false)] public int Id { get; set; }
+        public int Id { get; set; }
 
-        public string Transportista { get; set; } = "";
-        public string Matricula { get; set; } = "";
-        public string Muelle { get; set; } = "";
+        public string Transportista { get; set; } = string.Empty;
+        public string Matricula     { get; set; } = string.Empty;
+        public string Muelle        { get; set; } = string.Empty;
+        public string Estado        { get; set; } = string.Empty;
+        public string Destino       { get; set; } = string.Empty;
 
-        // Desplegable
-        public string Estado { get; set; } = "";
+        public string Llegada       { get; set; } = string.Empty;
+        public string LlegadaReal   { get; set; } = string.Empty;
+        public string SalidaReal    { get; set; } = string.Empty;
+        public string SalidaTope    { get; set; } = string.Empty;
 
-        public string Destino { get; set; } = "";
-        public string Llegada { get; set; } = "";
-        public string? LlegadaReal { get; set; }
-        public string? SalidaReal { get; set; }
-        public string SalidaTope { get; set; } = "";
-        public string Observaciones { get; set; } = "";
+        public string Observaciones { get; set; } = string.Empty;
+        public string Incidencias   { get; set; } = string.Empty;
 
-        // Desplegable
-        public string Incidencias { get; set; } = "";
+        /// <summary>Día de la operativa (DateOnly para evitar horas).</summary>
+        public DateOnly Fecha { get; set; } = DateOnly.FromDateTime(DateTime.Today);
 
-        // Nuevos
-        public string Precinto { get; set; } = "";
-        public bool Lex { get; set; } = false;
-
-        [Browsable(false)] public DateOnly Fecha { get; set; } = DateOnly.FromDateTime(DateTime.Now);
+        /// <summary>Lado operativo (LADO 0..LADO 9, etc).</summary>
+        public string Lado { get; set; } = "LADO 0";
     }
 }
