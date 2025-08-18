@@ -1,223 +1,156 @@
-using ClosedXML.Excel;
-using OperativaLogistica.Models;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
+using OperativaLogistica.Models;
 
 namespace OperativaLogistica.Services
 {
-    public static class ImportService
+    /// <summary>
+    /// Importación de operativas desde CSV (y fallback simple para .xlsx renombrados a .csv).
+    /// - Auto-mapea por cabeceras conocidas.
+    /// - Rellena Fecha con el parámetro 'fecha'.
+    /// - El parámetro 'lado' se usa tal cual en caso de que lo quieras registrar en Observaciones.
+    /// 
+    /// NOTA: Para simplificar la build en GitHub Actions no dependemos de librerías externas.
+    ///       Si el fichero es .xlsx sugiere exportarlo a .csv y volver a importar.
+    /// </summary>
+    public class ImportService
     {
-        private static readonly Dictionary<string, string[]> Synonyms = new(StringComparer.OrdinalIgnoreCase)
+        public List<Operacion> Importar(string filePath, DateTime fecha, string lado)
         {
-            ["TRANSPORTISTA"] = new[] { "transportista","carrier","empresa","proveedor","transport" },
-            ["MATRICULA"]     = new[] { "matricula","matrícula","mat","plate","placa","license","registration" },
-            ["MUELLE"]        = new[] { "muelle","dock","rampa","bay","door" },
-            ["ESTADO"]        = new[] { "estado","status","situacion","situación" },
-            ["DESTINO"]       = new[] { "destino","dest","destination","city","poblacion","población" },
-            ["LLEGADA"]       = new[] { "llegada","eta","hora llegada","arrival","hora prevista","hora entrada teorica","hora entrada teórica" },
-            ["SALIDA TOPE"]   = new[] { "salida tope","cutoff","cut-off","tope salida","lsl","hora salida tope" },
-            ["OBSERVACIONES"] = new[] { "observaciones","observ","comentarios","comments","notes","nota" },
-            ["INCIDENCIAS"]   = new[] { "incidencias","incid","issues","averias","averías","retrasos","anomalías","anomalias" },
-            ["LLEGADA REAL"]  = new[] { "llegada real","hora entrada real","real arrival" },
-            ["SALIDA REAL"]   = new[] { "salida real","hora salida real","real departure" },
-            ["PRECINTO"]      = new[] { "precinto","seal","seals" },
-            ["LEX"]           = new[] { "lex","check","oklex" }
-        };
+            var ext = Path.GetExtension(filePath).ToLowerInvariant();
 
-        public static List<Operacion> FromCsv(string path, DateOnly fecha)
-        {
-            var lines = File.ReadAllLines(path);
-            if (lines.Length == 0) return new();
+            if (ext == ".csv")
+                return ImportarCsv(filePath, fecha, lado);
 
-            var headers = SplitCsvLine(lines[0]).ToList();
-            var map = BuildIndex(headers);
-
-            var list = new List<Operacion>();
-            for (int r = 1; r < lines.Length; r++)
+            // Fallback: si no es CSV, intentamos leerlo como texto con separador de comas
+            // (muchos Excel guardados como .xlsx pero que en realidad llevan CSV).
+            try
             {
-                var parts = SplitCsvLine(lines[r]);
-                string Col(string key) =>
-                    map.TryGetValue(key, out var i) && i >= 0 && i < parts.Length ? parts[i].Trim() : "";
-
-                var op = new Operacion
-                {
-                    Transportista = Col("TRANSPORTISTA"),
-                    Matricula     = Col("MATRICULA"),
-                    Muelle        = Col("MUELLE"),
-                    Estado        = Col("ESTADO"),
-                    Destino       = Col("DESTINO"),
-                    Llegada       = NormalizeTime(Col("LLEGADA")),
-                    SalidaTope    = NormalizeTime(Col("SALIDA TOPE")),
-                    Observaciones = Col("OBSERVACIONES"),
-                    Incidencias   = Col("INCIDENCIAS"),
-                    LlegadaReal   = NormalizeTime(Col("LLEGADA REAL")),
-                    SalidaReal    = NormalizeTime(Col("SALIDA REAL")),
-                    Precinto      = Col("PRECINTO"),
-                    Lex           = (Col("LEX") == "1" || Col("LEX").Equals("true", StringComparison.OrdinalIgnoreCase)),
-                    Fecha         = fecha
-                };
-                if (!IsRowEmpty(op)) list.Add(op);
+                return ImportarCsv(filePath, fecha, lado);
             }
-            return list;
+            catch
+            {
+                throw new NotSupportedException(
+                    "Formato no soportado. Por favor exporta la hoja a CSV (separado por comas) y vuelve a importar.");
+            }
         }
 
-        public static List<Operacion> FromXlsx(string path, DateOnly fecha)
+        private List<Operacion> ImportarCsv(string filePath, DateTime fecha, string lado)
         {
-            using var wb = new XLWorkbook(path);
-            var ws = PickWorksheet(wb);
-            if (ws == null) return new();
+            var ops = new List<Operacion>();
+            using var sr = new StreamReader(filePath);
 
-            var lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
-            var lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
-            if (lastCol == 0 || lastRow == 0) return new();
+            // Lee cabecera
+            var header = sr.ReadLine();
+            if (string.IsNullOrWhiteSpace(header))
+                return ops;
 
-            // Cabecera probable (la fila con más celdas no vacías entre las 15 primeras)
-            var headerRow = ws.Rows(1, Math.Min(15, lastRow))
-                .OrderByDescending(r => r.Cells(1, lastCol).Count(c => !string.IsNullOrWhiteSpace(c.GetString())))
-                .First();
+            var headers = SplitCsvLine(header).Select(h => h.Trim().ToUpperInvariant()).ToArray();
 
-            var headers = headerRow.Cells(1, lastCol).Select(c => c.GetString()).ToList();
-            var map = BuildIndex(headers);
-
-            var list = new List<Operacion>();
-            for (int r = headerRow.RowNumber() + 1; r <= lastRow; r++)
+            // Func para buscar índice por nombre aproximado
+            int idx(params string[] names)
             {
-                var row = ws.Row(r);
-                if (row == null || !row.CellsUsed().Any()) continue;
-
-                string Get(string key)
+                foreach (var n in names)
                 {
-                    if (!map.TryGetValue(key, out var i)) return "";
-                    var cell = row.Cell(i + 1);
-                    if (cell == null) return "";
-                    if (cell.DataType == XLDataType.Number && (key == "LLEGADA" || key == "SALIDA TOPE" || key == "LLEGADA REAL" || key == "SALIDA REAL"))
-                        return FromExcelTime(cell.GetDouble());
-                    return cell.GetString()?.Trim() ?? "";
+                    var j = Array.FindIndex(headers, h => h.Contains(n.ToUpperInvariant()));
+                    if (j >= 0) return j;
                 }
+                return -1;
+            }
+
+            int iTransportista = idx("TRANSPORTISTA");
+            int iMatricula     = idx("MATRICULA", "MATRÍCULA", "PLACA");
+            int iMuelle        = idx("MUELLE", "DOCK");
+            int iEstado        = idx("ESTADO", "STATUS");
+            int iDestino       = idx("DESTINO");
+            int iLlegada       = idx("LLEGADA", "HORA LLEGADA", "HORA ENTRADA");
+            int iSalidaTope    = idx("SALIDA TOPE", "HORA SALIDA TOPE", "TOPE");
+            int iObs           = idx("OBSERVACIONES", "OBS");
+            int iInc           = idx("INCIDENCIAS", "INCIDENCIA");
+            int iPrecinto      = idx("PRECINTO");
+            // Puedes añadir más campos si tu hoja tiene otros nombres
+
+            string? line;
+            while ((line = sr.ReadLine()) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                var cols = SplitCsvLine(line);
+
+                string get(int index)
+                    => (index >= 0 && index < cols.Count) ? cols[index]?.Trim() ?? "" : "";
 
                 var op = new Operacion
                 {
-                    Transportista = Get("TRANSPORTISTA"),
-                    Matricula     = Get("MATRICULA"),
-                    Muelle        = Get("MUELLE"),
-                    Estado        = Get("ESTADO"),
-                    Destino       = Get("DESTINO"),
-                    Llegada       = NormalizeTime(Get("LLEGADA")),
-                    SalidaTope    = NormalizeTime(Get("SALIDA TOPE")),
-                    Observaciones = Get("OBSERVACIONES"),
-                    Incidencias   = Get("INCIDENCIAS"),
-                    LlegadaReal   = NormalizeTime(Get("LLEGADA REAL")),
-                    SalidaReal    = NormalizeTime(Get("SALIDA REAL")),
-                    Precinto      = Get("PRECINTO"),
-                    Lex           = Get("LEX").Equals("true", StringComparison.OrdinalIgnoreCase) || Get("LEX") == "1",
+                    Transportista = get(iTransportista),
+                    Matricula     = get(iMatricula),
+                    Muelle        = get(iMuelle),
+                    Estado        = get(iEstado),
+                    Destino       = get(iDestino),
+                    Llegada       = NormalizaHora(get(iLlegada)),
+                    SalidaTope    = NormalizaHora(get(iSalidaTope)),
+                    Observaciones = get(iObs),
+                    Incidencias   = get(iInc),
+                    Precinto      = get(iPrecinto),
                     Fecha         = fecha
                 };
 
-                if (!IsRowEmpty(op)) list.Add(op);
+                ops.Add(op);
             }
-            return list;
+
+            return ops;
         }
 
-        // ---------- utilidades ----------
-
-        private static IXLWorksheet? PickWorksheet(XLWorkbook wb)
+        private static string NormalizaHora(string val)
         {
-            foreach (var ws in wb.Worksheets)
-                if (ws?.FirstRowUsed() != null) return ws;
-            return wb.Worksheets.FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(val)) return "";
+            // intenta HH:mm o HH.mm o H:mm
+            var v = val.Trim().Replace('.', ':');
+            if (TimeSpan.TryParse(v, CultureInfo.InvariantCulture, out var ts))
+                return $"{(int)ts.TotalHours:00}:{ts.Minutes:00}";
+            return val;
         }
 
-        private static Dictionary<string, int> BuildIndex(IReadOnlyList<string> headers)
+        private static List<string> SplitCsvLine(string line)
         {
-            var cfg = ConfigService.LoadOrCreate();
-            var idx = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var normHeaders = headers.Select(Normalize).ToArray();
+            var res = new List<string>();
+            if (string.IsNullOrEmpty(line)) return res;
 
-            foreach (var target in Synonyms.Keys)
+            bool inQuotes = false;
+            var current = new System.Text.StringBuilder();
+
+            for (int i = 0; i < line.Length; i++)
             {
-                var wanted = Synonyms[target].Select(Normalize).ToArray();
+                var c = line[i];
 
-                for (int i = 0; i < normHeaders.Length; i++)
-                    if (wanted.Contains(normHeaders[i])) { idx[target] = i; goto next; }
-
-                for (int i = 0; i < normHeaders.Length; i++)
-                    if (wanted.Any(w => normHeaders[i].Contains(w))) { idx[target] = i; goto next; }
-
-                next:;
+                if (c == '"')
+                {
+                    if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        // doble comilla -> comilla literal
+                        current.Append('"'); i++;
+                    }
+                    else
+                    {
+                        inQuotes = !inQuotes;
+                    }
+                }
+                else if (c == ',' && !inQuotes)
+                {
+                    res.Add(current.ToString());
+                    current.Clear();
+                }
+                else
+                {
+                    current.Append(c);
+                }
             }
 
-            // Plantilla de mapeo del usuario (mapping.json)
-            foreach (var kv in cfg.Mapping)
-            {
-                var target = kv.Key.ToUpperInvariant();
-                var header = Normalize(kv.Value ?? "");
-                for (int i = 0; i < normHeaders.Length; i++)
-                    if (normHeaders[i] == header) { idx[target] = i; break; }
-            }
-
-            return idx;
-        }
-
-        private static string Normalize(string s)
-        {
-            if (string.IsNullOrWhiteSpace(s)) return "";
-            s = s.Trim().ToLowerInvariant();
-
-            // quitar tildes
-            var nf = s.Normalize(NormalizationForm.FormD);
-            var sb = new StringBuilder();
-            foreach (var ch in nf)
-                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
-                    sb.Append(ch);
-            s = sb.ToString().Normalize(NormalizationForm.FormC);
-
-            // quitar no alfanuméricos
-            return new string(s.Where(char.IsLetterOrDigit).ToArray());
-        }
-
-        private static bool IsRowEmpty(Operacion op) =>
-            string.IsNullOrWhiteSpace(op.Transportista)
-            && string.IsNullOrWhiteSpace(op.Matricula)
-            && string.IsNullOrWhiteSpace(op.Destino);
-
-        private static string FromExcelTime(double excelNumber)
-        {
-            var ts = TimeSpan.FromDays(excelNumber);
-            if (ts.TotalHours < 0 || ts.TotalHours > 48) return "";
-            return new DateTime(1, 1, 1).Add(ts).ToString("HH:mm");
-        }
-
-        private static string[] SplitCsvLine(string line)
-        {
-            var list = new List<string>();
-            bool q = false; string cur = "";
-            foreach (var ch in line)
-            {
-                if (ch == '"') q = !q;
-                else if (ch == ',' && !q) { list.Add(cur.Trim()); cur = ""; }
-                else cur += ch;
-            }
-            list.Add(cur.Trim());
-            return list.ToArray();
-        }
-
-        private static string NormalizeTime(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value)) return "";
-            value = value.Trim().ToLowerInvariant().Replace("h", "").Replace(".", ":");
-            if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var num))
-                if (num < 24 && Math.Abs(num - Math.Truncate(num)) < 1e-6) return $"{(int)num:00}:00";
-
-            var parts = value.Split(':');
-            if (parts.Length == 1) return $"{parts[0].PadLeft(2, '0')}:00";
-            string hh = parts[0].PadLeft(2, '0');
-            string mm = (parts.Length > 1 ? parts[1] : "00").PadLeft(2, '0');
-            if (mm.Length > 2) mm = mm[..2];
-            return $"{hh}:{mm}";
+            res.Add(current.ToString());
+            return res;
         }
     }
 }
