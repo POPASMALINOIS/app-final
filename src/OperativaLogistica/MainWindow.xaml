@@ -9,19 +9,22 @@
 
     <DockPanel>
 
-        <!-- Barra superior -->
-        <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Background="#EEE" Padding="8">
-            <TextBlock Text="Fecha:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-            <DatePicker SelectedDate="{Binding FechaActual}" Width="140" Margin="0,0,12,0"/>
+        <!-- Barra superior con PADDING correcto (en Border, no en StackPanel) -->
+        <Border DockPanel.Dock="Top" Background="#EEE" Padding="8">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Fecha:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <DatePicker SelectedDate="{Binding FechaActual}" Width="140" Margin="0,0,12,0"/>
 
-            <TextBlock Text="Buscar:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-            <TextBox Text="{Binding Filtro, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="0,0,12,0"/>
+                <TextBlock Text="Buscar:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Text="{Binding Filtro, UpdateSourceTrigger=PropertyChanged}" Width="200" Margin="0,0,12,0"/>
 
-            <TextBlock Text="Lado:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-            <ComboBox Width="120"
-                      ItemsSource="{x:Static vm:TabLadosProvider.Items}"
-                      SelectedItem="{Binding LadoSeleccionado}" Margin="0,0,12,0"/>
-        </StackPanel>
+                <TextBlock Text="Lado:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ComboBox Width="120"
+                          ItemsSource="{x:Static vm:TabLadosProvider.Items}"
+                          SelectedItem="{Binding LadoSeleccionado}"
+                          Margin="0,0,12,0"/>
+            </StackPanel>
+        </Border>
 
         <!-- Tabs (varias jornadas en paralelo) -->
         <TabControl ItemsSource="{Binding Sesiones}" SelectedItem="{Binding SesionActual}">
@@ -54,11 +57,19 @@
                             <!-- MUELLE -->
                             <DataGridTextColumn Header="MUELLE" Binding="{Binding Muelle}" Width="100"/>
 
-                            <!-- ESTADO (desplegable) -->
-                            <DataGridComboBoxColumn Header="ESTADO"
-                                                    SelectedItemBinding="{Binding Estado, Mode=TwoWay}"
-                                                    Width="150"
-                                                    ItemsSource="{Binding Source={x:Static vm:EstadosProvider.Items}}"/>
+                            <!-- ESTADO (desplegable, sin recursos externos) -->
+                            <DataGridTemplateColumn Header="ESTADO" Width="150">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox SelectedValue="{Binding Estado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  SelectedValuePath="Content">
+                                            <ComboBoxItem Content="CARGANDO"/>
+                                            <ComboBoxItem Content="OK"/>
+                                            <ComboBoxItem Content="ANULADO"/>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
                             <!-- DESTINO -->
                             <DataGridTextColumn Header="DESTINO" Binding="{Binding Destino}" Width="200"/>
@@ -100,7 +111,7 @@
                             <!-- OBSERVACIONES -->
                             <DataGridTextColumn Header="OBSERVACIONES" Binding="{Binding Observaciones}" Width="220"/>
 
-                            <!-- INCIDENCIAS (corregida con opción "SIN INCIDENCIAS") -->
+                            <!-- INCIDENCIAS (incluye opción para limpiar = "") -->
                             <DataGridTemplateColumn Header="INCIDENCIAS" Width="220">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
@@ -108,7 +119,7 @@
                                                   SelectedValue="{Binding Incidencias, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                   SelectedValuePath="Content">
                                             <ComboBox.Items>
-                                                <!-- Opción para limpiar (cadena vacía) -->
+                                                <!-- Limpia el valor (cadena vacía) mostrando 'SIN INCIDENCIAS' -->
                                                 <ComboBoxItem Content="">
                                                     <ComboBoxItem.Template>
                                                         <ControlTemplate TargetType="ComboBoxItem">
@@ -117,7 +128,6 @@
                                                     </ComboBoxItem.Template>
                                                 </ComboBoxItem>
 
-                                                <!-- Resto de opciones -->
                                                 <ComboBoxItem Content="RETRASO TRANSPORTISTA"/>
                                                 <ComboBoxItem Content="RETRASO DOCUMENTACION"/>
                                                 <ComboBoxItem Content="INCIDENCIA REMOLQUE"/>
@@ -133,6 +143,7 @@
 
                             <!-- LEX -->
                             <DataGridCheckBoxColumn Header="LEX" Binding="{Binding Lex}" Width="60"/>
+
                         </DataGrid.Columns>
                     </DataGrid>
                 </DataTemplate>
