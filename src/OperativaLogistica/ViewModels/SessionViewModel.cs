@@ -6,143 +6,61 @@ using RelayCommand = CommunityToolkit.Mvvm.Input.RelayCommandAttribute;
 
 namespace OperativaLogistica.ViewModels
 {
-    // Debe ser partial + heredar de ObservableObject
+    /// <summary>
+    /// ViewModel de sesión que maneja el estado del usuario
+    /// y los comandos de inicio/cierre de sesión.
+    /// </summary>
     public partial class SessionViewModel : ObservableObject
     {
-        // Aquí continúan tus propiedades y métodos actuales.
-        // Ejemplo de uso correcto con el Toolkit:
-        //
-        // [ObservableProperty]
-        // private string? usuario;
-        //
-        // [RelayCommand]
-        // private void IniciarSesion()
-        // {
-        //     // lógica...
-        // }
-    }
-}
+        // --- PROPIEDADES OBSERVABLES ---
+        // Estas generan automáticamente propiedad + notificación de cambio (INotifyPropertyChanged).
 
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using OperativaLogistica.Models;
-using OperativaLogistica.Services;
-using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.IO;
-using System.Linq;
-using System.Windows.Data;
+        [ObservableProperty]
+        private string? usuario;
 
-namespace OperativaLogistica.ViewModels
-{
-    public partial class SessionViewModel : ObservableObject
-    {
-        private readonly DatabaseService _db = new();
+        [ObservableProperty]
+        private bool sesionIniciada;
 
-        [ObservableProperty] private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
-        [ObservableProperty] private string selectedLado = "LADO 0";
-        [ObservableProperty] private string filterText = "";
+        [ObservableProperty]
+        private string? mensajeEstado;
 
-        public ObservableCollection<Operacion> Operaciones { get; } = new();
-        private ICollectionView? _view;
-        public ICollectionView View => _view ??= CollectionViewSource.GetDefaultView(Operaciones);
 
-        public SessionViewModel()
-        {
-            View.Filter = FilterPredicate;
-            Load();
-        }
-
-        public void Load()
-        {
-            Operaciones.Clear();
-            foreach (var op in _db.GetByDate(SelectedDate)) Operaciones.Add(op);
-            View.Refresh();
-        }
-
-        public void SaveAll()
-        {
-            foreach (var op in Operaciones) _db.Upsert(op);
-        }
-
-        private bool FilterPredicate(object obj)
-        {
-            if (string.IsNullOrWhiteSpace(FilterText)) return true;
-            if (obj is not Operacion op) return false;
-            var q = FilterText.Trim().ToLowerInvariant();
-            return ($"{op.Transportista} {op.Matricula} {op.Muelle} {op.Estado} {op.Destino} {op.Llegada} {op.LlegadaReal} {op.SalidaReal} {op.SalidaTope} {op.Observaciones} {op.Incidencias} {op.Precinto}")
-                   .ToLowerInvariant().Contains(q);
-        }
+        // --- COMANDOS ---
+        // Se generan automáticamente como ICommand al compilar.
 
         [RelayCommand]
-        private void MarkLlegada(object? parameter)
+        private void IniciarSesion()
         {
-            if (parameter is not Operacion op) return;
-            op.LlegadaReal = DateTime.Now.ToString("HH:mm");
-            _db.Upsert(op); View.Refresh();
-        }
-
-        [RelayCommand]
-        private void MarkSalida(object? parameter)
-        {
-            if (parameter is not Operacion op) return;
-            op.SalidaReal = DateTime.Now.ToString("HH:mm");
-            _db.Upsert(op); View.Refresh();
-        }
-
-        [RelayCommand]
-        private void DuplicateRow(object? parameter)
-        {
-            if (parameter is not Operacion op) return;
-            var copy = new Operacion
+            if (!string.IsNullOrWhiteSpace(Usuario))
             {
-                Transportista = op.Transportista,
-                Matricula = op.Matricula,
-                Muelle = op.Muelle,
-                Estado = op.Estado,
-                Destino = op.Destino,
-                Llegada = op.Llegada,
-                LlegadaReal = "",
-                SalidaReal = "",
-                SalidaTope = op.SalidaTope,
-                Observaciones = op.Observaciones,
-                Incidencias = op.Incidencias,
-                Precinto = op.Precinto,
-                Lex = op.Lex,
-                Fecha = SelectedDate
-            };
-            Operaciones.Add(copy);
-            _db.Upsert(copy);
+                SesionIniciada = true;
+                MensajeEstado = $"Sesión iniciada para {Usuario}.";
+            }
+            else
+            {
+                MensajeEstado = "Debe introducir un usuario.";
+            }
         }
 
         [RelayCommand]
-        private void DeleteRow(object? parameter)
+        private void CerrarSesion()
         {
-            if (parameter is not Operacion op) return;
-            Operaciones.Remove(op);
-            // borrado simple: marcar como eliminado vía Update (opcional: crear método Delete en DB)
+            SesionIniciada = false;
+            MensajeEstado = "Sesión cerrada.";
+            Usuario = null;
         }
 
-        public void AutoSave()
+        [RelayCommand]
+        private void RefrescarSesion()
         {
-            try
+            if (SesionIniciada)
             {
-                var name = $"autosave_{SelectedDate:yyyyMMdd}_{DateTime.Now:HHmm}.csv";
-                var path = Path.Combine(AppPaths.Autosaves, name);
-                using var sw = new StreamWriter(path, false, System.Text.Encoding.UTF8);
-                sw.WriteLine("Transportista,Matricula,Muelle,Estado,Destino,Llegada,LlegadaReal,SalidaReal,SalidaTope,Observaciones,Incidencias,Precinto,Lex,Fecha,Lado");
-                foreach (var op in Operaciones)
-                {
-                    sw.WriteLine(string.Join(",",
-                        Safe(op.Transportista), Safe(op.Matricula), Safe(op.Muelle), Safe(op.Estado), Safe(op.Destino),
-                        Safe(op.Llegada), Safe(op.LlegadaReal), Safe(op.SalidaReal), Safe(op.SalidaTope),
-                        Safe(op.Observaciones), Safe(op.Incidencias), Safe(op.Precinto),
-                        op.Lex ? "1" : "0",
-                        SelectedDate.ToString("yyyy-MM-dd"), SelectedLado));
-                }
-            } catch { }
+                MensajeEstado = $"La sesión de {Usuario} sigue activa.";
+            }
+            else
+            {
+                MensajeEstado = "No hay sesión activa.";
+            }
         }
-        private static string Safe(string? s) => $"\"{(s ?? "").Replace("\"", "''")}\"";
     }
 }
