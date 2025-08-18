@@ -33,9 +33,10 @@
                   CanUserAddRows="False"
                   CanUserDeleteRows="False"
                   IsReadOnly="False"
-                  Margin="8"
-                  ColumnWidth="SizeToHeader"
-                  ColumnWidthChanged="DataGrid_ColumnWidthChanged">
+                  SelectionMode="Extended"
+                  SelectionUnit="FullRow">
+            <!-- …tus columnas aquí… -->
+        </DataGrid>
 
             <!-- Columnas explícitas (encabezado = propiedad) -->
             <DataGrid.Columns>
