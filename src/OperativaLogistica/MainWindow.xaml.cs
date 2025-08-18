@@ -64,7 +64,10 @@ namespace OperativaLogistica
                 var fecha = DateOnly.FromDateTime(_vm.FechaActual);
                 var lado = _vm.LadoSeleccionado ?? "LADO 0";
 
-                var ops = _importService.Importar(dlg.FileName, fecha, lado) ?? Enumerable.Empty<Operacion>();
+                // 🔹 Conversión DateOnly → DateTime
+                var ops = _importService.Importar(dlg.FileName,
+                    fecha.ToDateTime(TimeOnly.MinValue),
+                    lado) ?? Enumerable.Empty<Operacion>();
 
                 // Carga en la pestaña activa (vacía por defecto)
                 var target = _vm.SesionActual!;
@@ -101,8 +104,7 @@ namespace OperativaLogistica
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, $"Error al exportar CSV: {ex.Message}", "Exportar CSV",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(this, $"Error al exportar CSV: {ex.Message}", "Exportar CSV", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -128,7 +130,12 @@ namespace OperativaLogistica
                 var fecha = DateOnly.FromDateTime(_vm.FechaActual);
                 var lado = _vm.LadoSeleccionado ?? "LADO 0";
 
-                _vm.PdfService.SaveJornadaPdf(dlg.FileName, _vm.SesionActual.Operaciones, fecha, lado);
+                // 🔹 Conversión DateOnly → DateTime
+                _vm.PdfService.SaveJornadaPdf(dlg.FileName,
+                    _vm.SesionActual.Operaciones,
+                    fecha.ToDateTime(TimeOnly.MinValue),
+                    lado);
+
                 MessageBox.Show(this, "PDF generado correctamente.", "Guardar PDF",
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -153,7 +160,7 @@ namespace OperativaLogistica
 
             try
             {
-                // Borra en BD (si tu DatabaseService no lo tiene todavía, añade un stub DeleteDay(DateOnly))
+                // Borra en BD
                 _databaseService.DeleteDay(fecha);
 
                 // Limpia las pestañas actuales
@@ -183,14 +190,12 @@ namespace OperativaLogistica
         private void DataGrid_ColumnWidthChanged(object sender, DataGridColumnEventArgs e)
         {
             // Hook para que compile. Aquí podrías persistir layout si tienes un servicio para ello.
-            // p.ej.: _vm.Config.SaveColumnLayout("principal", (DataGrid)sender);
         }
 
         // ===============  Utilidades  ===============
 
         private static void ExportarCsv(string filePath, IEnumerable<Operacion> ops)
         {
-            // Cabeceras “estándar” (ajusta si tu modelo cambia)
             var headers = new[]
             {
                 "Id","Transportista","Matricula","Muelle","Estado","Destino",
@@ -203,7 +208,6 @@ namespace OperativaLogistica
 
             foreach (var o in ops)
             {
-                // Evita nulls y escapa ;
                 static string S(object? v) => (v?.ToString() ?? "").Replace(';', ',');
                 var line = string.Join(";",
                     S(o.Id),
