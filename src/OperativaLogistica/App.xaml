@@ -1,19 +1,6 @@
-using System.Windows;
-
-namespace OperativaLogistica
-{
-    public partial class App : Application
-    {
-        static App()
-        {
-            // Inicializa el proveedor nativo (seguro llamar más de una vez)
-            SQLitePCL.Batteries_V2.Init();
-        }
-
-        protected override void OnStartup(StartupEventArgs e)
-        {
-            SQLitePCL.Batteries_V2.Init();
-            base.OnStartup(e);
-        }
-    }
-}
+<Application x:Class="OperativaLogistica.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources/>
+</Application>
