@@ -65,104 +65,113 @@ namespace OperativaLogistica.Services
             var ws = wb.Worksheets.Count > 0 ? wb.Worksheet(1) : null;
             if (ws == null) return list;
 
-            var range = ws.RangeUsed();
-            if (range == null) return list;
+            var used = ws.RangeUsed();
+            if (used is null) return list;
 
-            // Mapa de cabeceras -> índice (1-based)
-            var map = BuildHeaderMap(range.Row(1));
+            // límites del rango usado (1-based)
+            int r0 = used.FirstRow().RowNumber();
+            int c0 = used.FirstColumn().ColumnNumber();
+            int r1 = used.LastRow().RowNumber();
+            int c1 = used.LastColumn().ColumnNumber();
 
-            // Recorre filas con datos
-            for (int r = 2; r <= range.RowCount(); r++)
+            // Mapa de cabeceras -> columna (1-based dentro de [c0..c1])
+            var headerRow = ws.Row(r0).Cells(c0, c1);
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int c = c0; c <= c1; c++)
             {
-                var row = range.Row(r);
-                if (RowIsEmpty(row)) continue;
+                var raw = ws.Cell(r0, c).GetString().Trim();
+                if (string.IsNullOrEmpty(raw)) continue;
+                var key = raw.ToUpperInvariant();
+                map[key] = c;
+            }
 
-                string S(string key) => row.Cell(map.TryGetValue(key, out var c) ? c : int.MaxValue).GetFormattedString();
+            // Asegura claves esperadas (si no están, no se accede a celda)
+            string[] expected =
+            {
+                "ID","TRANSPORTISTA","MATRICULA","MUELLE","ESTADO","DESTINO",
+                "LLEGADA","LLEGADA REAL","SALIDA REAL","SALIDA TOPE",
+                "OBSERVACIONES","INCIDENCIAS","FECHA","PRECINTO","LEX","LADO"
+            };
+            foreach (var k in expected) map.TryAdd(k, -1); // -1 indica "no existe"
 
-                // DateOnly desde celda (numérico excel o texto)
-                string FechaCell()
-                {
-                    if (map.TryGetValue("FECHA", out var c))
-                    {
-                        var cell = row.Cell(c);
-                        if (TryGetDateOnly(cell, out var d)) return d.ToString("yyyy-MM-dd");
-                        return cell.GetFormattedString();
-                    }
-                    return string.Empty;
-                }
+            // Helpers seguros
+            string GetStr(int row, string header)
+            {
+                if (!map.TryGetValue(header, out int c)) return "";
+                if (c < c0 || c > c1) return "";
+                return ws.Cell(row, c).GetString().Trim();
+            }
+
+            string GetFechaStr(int row)
+            {
+                if (!map.TryGetValue("FECHA", out int c)) return "";
+                if (c < c0 || c > c1) return "";
+                var cell = ws.Cell(row, c);
+                if (TryGetDateOnly(cell, out var d))
+                    return d.ToString("yyyy-MM-dd");
+                return cell.GetString().Trim();
+            }
+
+            bool RowIsEmpty(int row)
+            {
+                for (int c = c0; c <= c1; c++)
+                    if (!string.IsNullOrWhiteSpace(ws.Cell(row, c).GetString()))
+                        return false;
+                return true;
+            }
+
+            // Recorre filas de datos
+            for (int r = r0 + 1; r <= r1; r++)
+            {
+                if (RowIsEmpty(r)) continue;
 
                 var op = CreateOperacion(
-                    S("ID"), S("TRANSPORTISTA"), S("MATRICULA"), S("MUELLE"), S("ESTADO"), S("DESTINO"),
-                    S("LLEGADA"), S("LLEGADA REAL"), S("SALIDA REAL"), S("SALIDA TOPE"),
-                    S("OBSERVACIONES"), S("INCIDENCIAS"), FechaCell(), S("PRECINTO"), S("LEX"), S("LADO"),
+                    GetStr(r, "ID"),
+                    GetStr(r, "TRANSPORTISTA"),
+                    GetStr(r, "MATRICULA"),
+                    GetStr(r, "MUELLE"),
+                    GetStr(r, "ESTADO"),
+                    GetStr(r, "DESTINO"),
+                    GetStr(r, "LLEGADA"),
+                    GetStr(r, "LLEGADA REAL"),
+                    GetStr(r, "SALIDA REAL"),
+                    GetStr(r, "SALIDA TOPE"),
+                    GetStr(r, "OBSERVACIONES"),
+                    GetStr(r, "INCIDENCIAS"),
+                    GetFechaStr(r),
+                    GetStr(r, "PRECINTO"),
+                    GetStr(r, "LEX"),
+                    GetStr(r, "LADO"),
                     fechaPorDefecto, ladoPorDefecto);
 
                 list.Add(op);
             }
 
             return list;
+        }
 
-            static Dictionary<string, int> BuildHeaderMap(IXLRangeRow headerRow)
+        private static bool TryGetDateOnly(IXLCell cell, out DateOnly d)
+        {
+            if (cell.DataType == XLDataType.DateTime)
             {
-                // Normalizamos a UPPER y quitamos espacios extra.
-                var dict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-                for (int c = 1; c <= headerRow.CellCount(); c++)
-                {
-                    var raw = headerRow.Cell(c).GetFormattedString()?.Trim() ?? "";
-                    if (string.IsNullOrEmpty(raw)) continue;
-
-                    var key = raw.ToUpperInvariant();
-
-                    // Alias habituales (por si cambian levemente las cabeceras)
-                    key = key switch
-                    {
-                        "LLEGADA REAL" => "LLEGADA REAL",
-                        "SALIDA REAL"  => "SALIDA REAL",
-                        "SALIDA TOPE"  => "SALIDA TOPE",
-                        _              => key
-                    };
-
-                    dict[key] = c;
-                }
-
-                // Aseguramos claves esenciales aunque no existan (no romperá si no están)
-                string[] expected = {
-                    "ID","TRANSPORTISTA","MATRICULA","MUELLE","ESTADO","DESTINO",
-                    "LLEGADA","LLEGADA REAL","SALIDA REAL","SALIDA TOPE",
-                    "OBSERVACIONES","INCIDENCIAS","FECHA","PRECINTO","LEX","LADO"
-                };
-                foreach (var k in expected)
-                    dict.TryAdd(k, int.MaxValue);
-
-                return dict;
-            }
-
-            static bool RowIsEmpty(IXLRangeRow row)
-            {
-                foreach (var cell in row.Cells())
-                    if (!string.IsNullOrWhiteSpace(cell.GetFormattedString()))
-                        return false;
+                d = DateOnly.FromDateTime(cell.GetDateTime());
                 return true;
             }
 
-            static bool TryGetDateOnly(IXLCell cell, out DateOnly d)
+            var s = cell.GetString().Trim();
+            if (DateOnly.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out d)) return true;
+            if (DateOnly.TryParseExact(s, "dd/MM/yyyy", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out d)) return true;
+
+            if (DateTime.TryParse(s, CultureInfo.CurrentCulture, DateTimeStyles.None, out var dt))
             {
-                // Si el tipo de celda es DateTime (numérico Excel)
-                if (cell.DataType == XLDataType.DateTime)
-                {
-                    var dt = cell.GetDateTime();
-                    d = DateOnly.FromDateTime(dt);
-                    return true;
-                }
-                // Si es texto, intentamos varios formatos
-                var s = cell.GetFormattedString()?.Trim() ?? "";
-                if (DateOnly.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                        DateTimeStyles.None, out d)) return true;
-                if (DateOnly.TryParseExact(s, "dd/MM/yyyy", CultureInfo.InvariantCulture,
-                        DateTimeStyles.None, out d)) return true;
-                return false;
+                d = DateOnly.FromDateTime(dt);
+                return true;
             }
+
+            d = default;
+            return false;
         }
 
         // ---------------- Util común ----------------
@@ -176,13 +185,16 @@ namespace OperativaLogistica.Services
             static DateOnly ParseFecha(string s, DateOnly fallback)
             {
                 if (string.IsNullOrWhiteSpace(s)) return fallback;
+
                 if (DateOnly.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out var d)) return d;
+
                 if (DateOnly.TryParseExact(s, "dd/MM/yyyy", CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out d)) return d;
-                // Último intento a parseo flexible
+
                 if (DateTime.TryParse(s, CultureInfo.CurrentCulture, DateTimeStyles.None, out var dt))
                     return DateOnly.FromDateTime(dt);
+
                 return fallback;
             }
 
