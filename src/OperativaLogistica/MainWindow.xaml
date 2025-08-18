@@ -4,11 +4,11 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Operativa Logística" Height="900" Width="1500">
+        Title="PLM INDITEX EXPEDICIÓN" Height="900" Width="1500">
 
     <DockPanel>
 
-        <!-- Barra de menú (opcional, ajústala según lo que ya tenías) -->
+        <!-- ===== Menú superior ===== -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_Archivo">
                 <MenuItem Header="Nueva pestaña" Click="NewTab_Click"/>
@@ -27,57 +27,61 @@
             </MenuItem>
         </Menu>
 
-        <!-- DataGrid principal -->
-        <DataGrid x:Name="dgOperaciones"
+        <!-- ===== Barra de filtros rápida (opcional) ===== -->
+        <ToolBar DockPanel.Dock="Top" Padding="6">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                <TextBlock Text="Fecha:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <DatePicker SelectedDate="{Binding FechaActual, Mode=TwoWay}" Width="150" />
+                <TextBlock Text="   Lado:" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                <ComboBox Width="140"
+                          ItemsSource="{Binding Config.Lados}"
+                          SelectedItem="{Binding LadoSeleccionado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+            </StackPanel>
+        </ToolBar>
+
+        <!-- ===== DataGrid principal ===== -->
+        <DataGrid x:Name="dg"
                   ItemsSource="{Binding SesionActual.Operaciones}"
                   AutoGenerateColumns="False"
                   CanUserAddRows="False"
                   CanUserDeleteRows="True"
                   IsReadOnly="False"
-                  DockPanel.Dock="Top"
-                  Margin="6"
+                  Margin="8"
                   HeadersVisibility="Column"
-                  GridLinesVisibility="All">
+                  GridLinesVisibility="All"
+                  SelectionMode="Extended"
+                  SelectionUnit="FullRow">
 
-            <!-- Hook equivalente a ColumnWidthChanged: sobre el header -->
-            <DataGrid.Resources>
-                <Style TargetType="DataGridColumnHeader">
-                    <EventSetter Event="SizeChanged" Handler="DataGrid_ColumnWidthChanged"/>
-                </Style>
-            </DataGrid.Resources>
-
+            <!-- Columnas explícitas (encabezado ↔ propiedad) -->
             <DataGrid.Columns>
+                <DataGridTextColumn Header="Id"            Binding="{Binding Id}" Width="60" />
+                <DataGridTextColumn Header="Transportista" Binding="{Binding Transportista}" Width="220" />
+                <DataGridTextColumn Header="Matricula"     Binding="{Binding Matricula}" Width="110" />
+                <DataGridTextColumn Header="Muelle"        Binding="{Binding Muelle}" Width="90" />
+                <DataGridTextColumn Header="Estado"        Binding="{Binding Estado}" Width="110" />
+                <DataGridTextColumn Header="Destino"       Binding="{Binding Destino}" Width="220" />
 
-                <!-- Ordena/ajusta los DisplayIndex y Width a tu gusto -->
-                <DataGridTextColumn Binding="{Binding Id}" Header="Id" Width="60" />
-                <DataGridTextColumn Binding="{Binding Transportista}" Header="Transportista" Width="220" />
-                <DataGridTextColumn Binding="{Binding Matricula}" Header="Matricula" Width="110" />
-                <DataGridTextColumn Binding="{Binding Muelle}" Header="Muelle" Width="90" />
-                <DataGridTextColumn Binding="{Binding Estado}" Header="Estado" Width="110" />
-                <DataGridTextColumn Binding="{Binding Destino}" Header="Destino" Width="220" />
+                <DataGridTextColumn Header="Llegada"       Binding="{Binding Llegada}" Width="110" />
+                <DataGridTextColumn Header="LlegadaReal"   Binding="{Binding LlegadaReal}" Width="110" />
+                <DataGridTextColumn Header="SalidaReal"    Binding="{Binding SalidaReal}" Width="110" />
+                <DataGridTextColumn Header="SalidaTope"    Binding="{Binding SalidaTope}" Width="110" />
 
-                <DataGridTextColumn Binding="{Binding Llegada}" Header="Llegada" Width="110" />
-                <DataGridTextColumn Binding="{Binding LlegadaReal}" Header="LlegadaReal" Width="110" />
-                <DataGridTextColumn Binding="{Binding SalidaReal}" Header="SalidaReal" Width="110" />
-                <DataGridTextColumn Binding="{Binding SalidaTope}" Header="SalidaTope" Width="110" />
+                <DataGridTextColumn Header="Observaciones" Binding="{Binding Observaciones}" Width="300" />
+                <DataGridTextColumn Header="Incidencias"   Binding="{Binding Incidencias}" Width="240" />
 
-                <DataGridTextColumn Binding="{Binding Observaciones}" Header="Observaciones" Width="300" />
-                <DataGridTextColumn Binding="{Binding Incidencias}" Header="Incidencias" Width="240" />
+                <!-- Fecha (DateOnly) en formato yyyy-MM-dd -->
+                <DataGridTextColumn Header="Fecha"         Binding="{Binding Fecha, StringFormat=\{0:yyyy-MM-dd\}}" Width="120" />
 
-                <!-- Fecha (DateOnly) se muestra con ToString() por defecto; si quieres formato, usa StringFormat -->
-                <DataGridTextColumn Binding="{Binding Fecha, StringFormat=\{0:yyyy-MM-dd\}}" Header="Fecha" Width="120" />
+                <DataGridTextColumn Header="Precinto"      Binding="{Binding Precinto}" Width="120" />
+                <DataGridCheckBoxColumn Header="Lex"       Binding="{Binding Lex}" Width="60" />
 
-                <DataGridTextColumn Binding="{Binding Precinto}" Header="Precinto" Width="120" />
-
-                <!-- Lex (bool) como CheckBox -->
-                <DataGridCheckBoxColumn Binding="{Binding Lex}" Header="Lex" Width="60" />
-
-                <!-- Lado como ComboBox (ItemsSource = Config.Lados; SelectedItem = Operacion.Lado) -->
+                <!-- Lado: ItemsSource = lista de strings; SelectedItem = string -->
                 <DataGridComboBoxColumn Header="Lado"
                                         Width="140"
-                                        SelectedItemBinding="{Binding Lado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                        ItemsSource="{Binding DataContext.Config.Lados, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                                        ItemsSource="{Binding DataContext.Config.Lados, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        SelectedItemBinding="{Binding Lado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
             </DataGrid.Columns>
         </DataGrid>
+
     </DockPanel>
 </Window>
