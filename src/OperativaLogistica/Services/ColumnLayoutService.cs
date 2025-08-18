@@ -1,44 +1,26 @@
-using System.Collections.Generic;
 using System.Windows.Controls;
 
 namespace OperativaLogistica.Services
 {
     /// <summary>
-    /// Aplica y guarda el ancho de columnas del DataGrid por LADO.
+    /// Stub sin lógica real. Evita errores de compilación por referencias a métodos inexistentes
+    /// de ConfigService. Completar en el futuro si quieres persistir el layout de columnas.
     /// </summary>
     public class ColumnLayoutService
     {
-        private readonly ConfigService _config;
-
-        public ColumnLayoutService(ConfigService config) => _config = config;
-
-        public void ApplyColumnLayout(DataGrid grid, string lado)
+        public ColumnLayoutService(ConfigService _)
         {
-            var layout = _config.LoadOrCreateColumnLayout(lado);
-            foreach (var col in grid.Columns)
-            {
-                var key = col.Header?.ToString();
-                if (!string.IsNullOrWhiteSpace(key) &&
-                    layout.Widths.TryGetValue(key!, out var w) && w > 0)
-                {
-                    col.Width = w;
-                }
-            }
+            // no-op
         }
 
-        public void SaveColumnLayout(DataGrid grid, string lado)
+        public void LoadOrCreateColumnLayout(DataGrid _)
         {
-            var map = new Dictionary<string, double>();
-            foreach (var col in grid.Columns)
-            {
-                var key = col.Header?.ToString();
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    // ActualWidth da el ancho real en píxeles
-                    map[key!] = col.ActualWidth;
-                }
-            }
-            _config.SaveColumnLayout(lado, map);
+            // no-op (antes delegaba en ConfigService.LoadOrCreateColumnLayout)
+        }
+
+        public void SaveColumnLayout(DataGrid _)
+        {
+            // no-op (antes delegaba en ConfigService.SaveColumnLayout)
         }
     }
 }
