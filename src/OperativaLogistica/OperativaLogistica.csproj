@@ -4,28 +4,29 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-
-    <!-- Opcional: si tu restore sigue tratando NU1605 como error, descomenta la siguiente línea
-         para suprimir sólo ese warning. Lo ideal es NO dejarlo a largo plazo. -->
+    <!-- Si tu restore sigue mostrando NUGET NU1605, mejor ajustar versiones que suprimir el warning -->
     <!-- <NoWarn>$(NoWarn);NU1605</NoWarn> -->
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Paquetes WPF/infra -->
+    <!-- MVVM / infra -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
 
-    <!-- Excel: fija ClosedXML a la rama 0.104.x y, MUY IMPORTANTE,
-         referencia DIRECTAMENTE OpenXml 3.0.1 para evitar la “downgrade” a 2.20.0 -->
+    <!-- Excel (ClosedXML 0.104.x obliga a usar DocumentFormat.OpenXml 3.x) -->
     <PackageReference Include="ClosedXML" Version="0.104.0" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.0.1" />
 
     <!-- SQLite administrado (Microsoft.Data.Sqlite) -->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.7" />
 
-    <!-- Logging sencillo (opcional, si lo usas) -->
+    <!-- 🔽🔽🔽  BUNDLE NATIVO NECESARIO  🔽🔽🔽 -->
+    <!-- Esto empaqueta e_sqlite3 nativo y evita el error “You need to call SQLitePCL.raw.SetProvider()...” -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.8" />
+    <PackageReference Include="SQLitePCLRaw.core" Version="2.1.8" />
+    <!-- 🔼🔼🔼  FIN BUNDLE NATIVO  🔼🔼🔼 -->
+
+    <!-- Logging sencillo (si lo quieres) -->
     <!-- <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" /> -->
   </ItemGroup>
-
-  <!-- Si tenías System.Data.SQLite o referencias antiguas, elimínalas del proyecto -->
 
 </Project>
