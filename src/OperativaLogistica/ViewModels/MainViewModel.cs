@@ -2,134 +2,138 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows.Input;
-
 using OperativaLogistica.Models;
 using OperativaLogistica.Services;
 
 namespace OperativaLogistica.ViewModels
 {
-    /// <summary>
-    /// VM raíz de la aplicación.
-    /// </summary>
     public class MainViewModel : INotifyPropertyChanged
     {
-        // ========= Eventos =========
         public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
-        // ========= Servicios =========
-        // ¡OJO! Solo UNA propiedad 'Config' para evitar el CS0102.
+        // ========= CONFIG (LADOS 0..9) =========
         public ConfigService Config { get; }
-        public PdfService PdfService { get; } = new PdfService();
 
-        // ========= Estado global =========
-        private DateTime _fechaActual = DateTime.Today;
-        public DateTime FechaActual
-        {
-            get => _fechaActual;
-            set { _fechaActual = value; OnPropertyChanged(); }
-        }
-
-        private string _ladoSeleccionado = "LADO 0";
+        private string _ladoSeleccionado = string.Empty;
+        /// <summary>Lado seleccionado en la barra superior.</summary>
         public string LadoSeleccionado
         {
             get => _ladoSeleccionado;
-            set { _ladoSeleccionado = value; OnPropertyChanged(); }
+            set
+            {
+                if (_ladoSeleccionado != value)
+                {
+                    _ladoSeleccionado = value;
+                    OnPropertyChanged();
+                }
+            }
         }
 
-        // Pestañas y pestaña activa
-        public ObservableCollection<TabViewModel> Pestanas { get; } = new();
+        private DateTime _fechaActual = DateTime.Today;
+        /// <summary>Fecha seleccionada en la barra superior.</summary>
+        public DateTime FechaActual
+        {
+            get => _fechaActual;
+            set
+            {
+                if (_fechaActual != value)
+                {
+                    _fechaActual = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        // ========= PESTAÑAS =========
+        public ObservableCollection<TabViewModel> Pestañas { get; } = new();
 
         private TabViewModel? _sesionActual;
+        /// <summary>Pestaña activa (la que se muestra en el DataGrid).</summary>
         public TabViewModel? SesionActual
         {
             get => _sesionActual;
-            set { _sesionActual = value; OnPropertyChanged(); }
+            set
+            {
+                if (_sesionActual != value)
+                {
+                    _sesionActual = value;
+                    OnPropertyChanged();
+                }
+            }
         }
 
-        // ========= Comandos =========
-        public ICommand NuevaPestanaCommand { get; }
-        public ICommand CerrarPestanaCommand { get; }
-        public ICommand SaveJornadaPdfCommand { get; }
+        // ========= SERVICIOS =========
+        /// <summary>Servicio de PDF usado por MainWindow.xaml.cs.</summary>
+        public PdfService PdfService { get; }
 
-        // ========= Constructores =========
-        public MainViewModel() : this(new ConfigService())
+        // ========= CTOR =========
+        public MainViewModel()
         {
+            // LADOS 0..9 (si quisieras 0..12: new ConfigService(0, 12))
+            Config = new ConfigService(0, 9);
+
+            // Valores iniciales
+            LadoSeleccionado = Config.Lados.Count > 0 ? Config.Lados[0] : "LADO 0";
+            FechaActual      = DateTime.Today;
+
+            // Servicio PDF (si ya lo registras en otro sitio, puedes inyectarlo)
+            PdfService = new PdfService();
+
+            // Asegura una pestaña inicial en blanco
+            NuevaPestana();
         }
 
-        public MainViewModel(ConfigService config)
+        // ========= COMANDOS SENCILLOS =========
+        public void NuevaPestana()
         {
-            Config = config;
-
-            // Al menos una pestaña al iniciar
-            NuevaPestanaCore();
-
-            NuevaPestanaCommand   = new RelayCommand(_ => NuevaPestana());
-            CerrarPestanaCommand  = new RelayCommand(_ => CerrarPestana(), _ => SesionActual != null);
-            SaveJornadaPdfCommand = new RelayCommand(_ => SaveJornadaPdf(), _ => SesionActual != null);
-        }
-
-        // ========= API pública usada por la vista =========
-        /// <summary> Crea una nueva pestaña en blanco y la activa. </summary>
-        public void NuevaPestana() => NuevaPestanaCore();
-
-        /// <summary> Cierra la pestaña activa. </summary>
-        public void CerrarPestana()
-        {
-            if (SesionActual is null) return;
-            var idx = Pestanas.IndexOf(SesionActual);
-            if (idx >= 0) Pestanas.RemoveAt(idx);
-            SesionActual = Pestanas.Count > 0 ? Pestanas[Math.Max(0, idx - 1)] : null;
-        }
-
-        /// <summary>
-        /// Punto de entrada opcional si quieres lanzar la exportación a PDF desde Command.
-        /// El code-behind puede llamar a PdfService directamente con el diálogo de guardado.
-        /// </summary>
-        public void SaveJornadaPdf()
-        {
-            // Aquí no forzamos la ruta de guardado para no interferir con el diálogo UI.
-            // Deja esta función como “hook” si la necesitas desde XAML.
-        }
-
-        // ========= Helpers internos =========
-        private void NuevaPestanaCore()
-        {
-            var titulo = !string.IsNullOrWhiteSpace(LadoSeleccionado) ? LadoSeleccionado : "Operativa";
             var tab = new TabViewModel
             {
-                Titulo = titulo,
+                Titulo = $"Pestaña {Pestañas.Count + 1}",
                 Operaciones = new ObservableCollection<Operacion>()
             };
-            Pestanas.Add(tab);
+
+            Pestañas.Add(tab);
             SesionActual = tab;
         }
 
-        protected void OnPropertyChanged([CallerMemberName] string? propName = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propName));
+        public void CerrarPestana()
+        {
+            if (SesionActual is null) return;
+
+            var idx = Pestañas.IndexOf(SesionActual);
+            if (idx >= 0)
+            {
+                Pestañas.RemoveAt(idx);
+                SesionActual = Pestañas.Count > 0
+                    ? Pestañas[Math.Clamp(idx - 1, 0, Pestañas.Count - 1)]
+                    : null;
+            }
+        }
     }
 
     /// <summary>
-    /// RelayCommand para comandos simples en el VM.
+    /// ViewModel de cada pestaña. Si ya tienes este tipo en otro archivo, deja solo el tuyo.
     /// </summary>
-    public class RelayCommand : ICommand
+    public class TabViewModel : INotifyPropertyChanged
     {
-        private readonly Action<object?> _execute;
-        private readonly Predicate<object?>? _canExecute;
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
-        public RelayCommand(Action<object?> execute, Predicate<object?>? canExecute = null)
+        private string _titulo = "Pestaña";
+        public string Titulo
         {
-            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
-            _canExecute = canExecute;
+            get => _titulo;
+            set { if (_titulo != value) { _titulo = value; OnPropertyChanged(); } }
         }
 
-        public bool CanExecute(object? parameter) => _canExecute == null || _canExecute(parameter);
-        public void Execute(object? parameter) => _execute(parameter);
-
-        public event EventHandler? CanExecuteChanged
+        private ObservableCollection<Operacion> _operaciones = new();
+        public ObservableCollection<Operacion> Operaciones
         {
-            add    { CommandManager.RequerySuggested += value; }
-            remove { CommandManager.RequerySuggested -= value; }
+            get => _operaciones;
+            set { if (_operaciones != value) { _operaciones = value; OnPropertyChanged(); } }
         }
     }
 }
