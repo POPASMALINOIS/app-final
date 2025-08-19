@@ -9,12 +9,52 @@
 
     <!-- ===== Recursos de ventana ===== -->
     <Window.Resources>
+
         <!-- Opciones del desplegable de Estado -->
         <x:Array x:Key="EstadosOpciones" Type="{x:Type sys:String}">
             <sys:String>Cargando</sys:String>
             <sys:String>OK</sys:String>
             <sys:String>Anulado</sys:String>
         </x:Array>
+
+        <!-- Icono de reloj como Geometry -->
+        <!-- (simple, vectorial. Si quieres otro estilo, lo cambiamos) -->
+        <Geometry x:Key="IconClock">
+            F1 M 12,2 A 10,10 0 1 1 11.999,2 Z
+            M 11,6 L 13,6 13,12 18,12 18,14 11,14 Z
+        </Geometry>
+
+        <!-- Botón “icon-only” sin bordes -->
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="22"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#14000000"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#22000000"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Window.Resources>
 
     <DockPanel>
@@ -69,7 +109,7 @@
                 <DataGridTextColumn Header="Matricula"     Binding="{Binding Matricula}" Width="110" />
                 <DataGridTextColumn Header="Muelle"        Binding="{Binding Muelle}" Width="90" />
 
-                <!-- Estado como ComboBox con 3 opciones -->
+                <!-- Estado: desplegable -->
                 <DataGridComboBoxColumn Header="Estado"
                                         Width="110"
                                         ItemsSource="{StaticResource EstadosOpciones}"
@@ -79,10 +119,65 @@
                 <DataGridTextColumn Header="Destino"       Binding="{Binding Destino}" Width="220" />
 
                 <DataGridTextColumn Header="Llegada"       Binding="{Binding Llegada}" Width="110" />
-                <!-- Si ya tienes las columnas con botón/ícono para hora, deja las tuyas.
-                     Aquí las dejo como TextColumn para no interferir con tu versión. -->
-                <DataGridTextColumn Header="LlegadaReal"   Binding="{Binding LlegadaReal}" Width="110" />
-                <DataGridTextColumn Header="SalidaReal"    Binding="{Binding SalidaReal}" Width="110" />
+
+                <!-- LlegadaReal con botón de reloj -->
+                <DataGridTemplateColumn Header="LlegadaReal" Width="120">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel LastChildFill="False">
+                                <TextBlock Text="{Binding LlegadaReal}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <Button Style="{StaticResource IconButton}"
+                                        ToolTip="Marcar hora actual"
+                                        Click="SetLlegadaRealNow_Click">
+                                    <Path Data="{StaticResource IconClock}" Fill="DimGray" Stretch="Uniform"/>
+                                </Button>
+                            </DockPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                        <DataTemplate>
+                            <DockPanel LastChildFill="False">
+                                <TextBox Text="{Binding LlegadaReal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <Button Style="{StaticResource IconButton}"
+                                        ToolTip="Marcar hora actual"
+                                        Click="SetLlegadaRealNow_Click">
+                                    <Path Data="{StaticResource IconClock}" Fill="DimGray" Stretch="Uniform"/>
+                                </Button>
+                            </DockPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- SalidaReal con botón de reloj -->
+                <DataGridTemplateColumn Header="SalidaReal" Width="120">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel LastChildFill="False">
+                                <TextBlock Text="{Binding SalidaReal}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <Button Style="{StaticResource IconButton}"
+                                        ToolTip="Marcar hora actual"
+                                        Click="SetSalidaRealNow_Click">
+                                    <Path Data="{StaticResource IconClock}" Fill="DimGray" Stretch="Uniform"/>
+                                </Button>
+                            </DockPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                    <DataGridTemplateColumn.CellEditingTemplate>
+                        <DataTemplate>
+                            <DockPanel LastChildFill="False">
+                                <TextBox Text="{Binding SalidaReal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <Button Style="{StaticResource IconButton}"
+                                        ToolTip="Marcar hora actual"
+                                        Click="SetSalidaRealNow_Click">
+                                    <Path Data="{StaticResource IconClock}" Fill="DimGray" Stretch="Uniform"/>
+                                </Button>
+                            </DockPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellEditingTemplate>
+                </DataGridTemplateColumn>
+
                 <DataGridTextColumn Header="SalidaTope"    Binding="{Binding SalidaTope}" Width="110" />
 
                 <DataGridTextColumn Header="Observaciones" Binding="{Binding Observaciones}" Width="300" />
