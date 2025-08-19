@@ -20,7 +20,7 @@ namespace OperativaLogistica
         private readonly MainViewModel _vm;
         private readonly ImportService _importService = new ImportService();
         private readonly DatabaseService _databaseService = new DatabaseService();
-        private readonly ExportService _exportService = new ExportService(); // si no lo tienes aún, puedes quitarlo o añadir el archivo
+        private readonly ExportService _exportService = new ExportService(); // si no lo tienes aún, puedes quitarlo
 
         public MainWindow()
         {
@@ -65,7 +65,7 @@ namespace OperativaLogistica
                 // Importa desde el servicio (tolerante a cabeceras)
                 var items = _importService.Importar(dlg.FileName, fecha, lado) ?? Enumerable.Empty<Operacion>();
 
-                // ⚠️ CLAVE: NO reasignar la colección; limpiar y añadir
+                // CLAVE: NO reasignar la colección; limpiar y añadir
                 var target = _vm.SesionActual!.Operaciones;
                 target.Clear();
                 foreach (var op in items)
@@ -100,9 +100,7 @@ namespace OperativaLogistica
                 };
                 if (dlg.ShowDialog() != true) return;
 
-                // Si tienes ExportService, úsalo; si no, usa el método local ExportarCsv(...)
                 ExportarCsv(dlg.FileName, _vm.SesionActual.Operaciones);
-                // _exportService.SaveCsv(dlg.FileName, _vm.SesionActual.Operaciones);
 
                 MessageBox.Show(this, "CSV exportado correctamente.", "Exportar CSV",
                     MessageBoxButton.OK, MessageBoxImage.Information);
@@ -136,9 +134,7 @@ namespace OperativaLogistica
                 var fechaOnly = DateOnly.FromDateTime(_vm.FechaActual);
                 var lado      = string.IsNullOrWhiteSpace(_vm.LadoSeleccionado) ? "LADO 0" : _vm.LadoSeleccionado;
 
-                // Si tu PdfService espera DateTime, convierte desde DateOnly:
                 var fechaDateTime = fechaOnly.ToDateTime(TimeOnly.MinValue);
-
                 _vm.PdfService.SaveJornadaPdf(dlg.FileName, _vm.SesionActual.Operaciones, fechaDateTime, lado);
 
                 MessageBox.Show(this, "PDF generado correctamente.", "Guardar PDF",
@@ -181,6 +177,49 @@ namespace OperativaLogistica
                 "Acerca de", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
+        // ===================== BOTONES "AHORA" =====================
+
+        private static string HoraAhora() => DateTime.Now.ToString("HH:mm");
+
+        private void LlegadaRealAhora_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.DataContext is Operacion op)
+            {
+                if (!string.IsNullOrWhiteSpace(op.LlegadaReal))
+                {
+                    var r = MessageBox.Show(this,
+                        $"La LlegadaReal ya tiene valor ({op.LlegadaReal}). ¿Sobrescribir por la hora actual?",
+                        "Confirmar", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    if (r != MessageBoxResult.Yes) return;
+                }
+
+                op.LlegadaReal = HoraAhora();
+
+                // Si Operacion no implementa INotifyPropertyChanged, forzamos repintado:
+                dg.CommitEdit(DataGridEditingUnit.Cell, true);
+                dg.Items.Refresh();
+            }
+        }
+
+        private void SalidaRealAhora_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.DataContext is Operacion op)
+            {
+                if (!string.IsNullOrWhiteSpace(op.SalidaReal))
+                {
+                    var r = MessageBox.Show(this,
+                        $"La SalidaReal ya tiene valor ({op.SalidaReal}). ¿Sobrescribir por la hora actual?",
+                        "Confirmar", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    if (r != MessageBoxResult.Yes) return;
+                }
+
+                op.SalidaReal = HoraAhora();
+
+                dg.CommitEdit(DataGridEditingUnit.Cell, true);
+                dg.Items.Refresh();
+            }
+        }
+
         // ===================== UTILIDADES =====================
 
         private static void ExportarCsv(string filePath, IEnumerable<Operacion> ops)
@@ -213,8 +252,7 @@ namespace OperativaLogistica
                     S(o.SalidaTope),
                     S(o.Observaciones),
                     S(o.Incidencias),
-                    // Fecha: si quieres formato fijo, cámbialo a o.Fecha.ToString("yyyy-MM-dd")
-                    S(o.Fecha),
+                    S(o.Fecha),   // si prefieres formato fijo: o.Fecha.ToString("yyyy-MM-dd")
                     S(o.Precinto),
                     S(o.Lex),
                     S(o.Lado)
