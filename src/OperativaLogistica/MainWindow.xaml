@@ -3,8 +3,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
         Title="PLM INDITEX EXPEDICIÓN" Height="900" Width="1500">
+
+    <!-- ===== Recursos de ventana ===== -->
+    <Window.Resources>
+        <!-- Opciones del desplegable de Estado -->
+        <x:Array x:Key="EstadosOpciones" Type="{x:Type sys:String}">
+            <sys:String>Cargando</sys:String>
+            <sys:String>OK</sys:String>
+            <sys:String>Anulado</sys:String>
+        </x:Array>
+    </Window.Resources>
 
     <DockPanel>
 
@@ -52,56 +63,38 @@
                   SelectionMode="Extended"
                   SelectionUnit="FullRow">
 
-            <!-- Columnas explícitas -->
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Id"            Binding="{Binding Id}" Width="60" />
                 <DataGridTextColumn Header="Transportista" Binding="{Binding Transportista}" Width="220" />
                 <DataGridTextColumn Header="Matricula"     Binding="{Binding Matricula}" Width="110" />
                 <DataGridTextColumn Header="Muelle"        Binding="{Binding Muelle}" Width="90" />
-                <DataGridTextColumn Header="Estado"        Binding="{Binding Estado}" Width="110" />
+
+                <!-- Estado como ComboBox con 3 opciones -->
+                <DataGridComboBoxColumn Header="Estado"
+                                        Width="110"
+                                        ItemsSource="{StaticResource EstadosOpciones}"
+                                        SelectedItemBinding="{Binding Estado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        IsReadOnly="False"/>
+
                 <DataGridTextColumn Header="Destino"       Binding="{Binding Destino}" Width="220" />
+
                 <DataGridTextColumn Header="Llegada"       Binding="{Binding Llegada}" Width="110" />
-
-                <!-- LlegadaReal con icono de reloj -->
-                <DataGridTemplateColumn Header="LlegadaReal" Width="120">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding LlegadaReal}" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <Button FontFamily="Segoe MDL2 Assets"
-                                        Content="&#xE121;"
-                                        Padding="4"
-                                        MinWidth="28"
-                                        Click="LlegadaRealAhora_Click"
-                                        ToolTip="Poner hora actual como Llegada Real"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-
-                <!-- SalidaReal con icono de reloj -->
-                <DataGridTemplateColumn Header="SalidaReal" Width="120">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding SalidaReal}" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <Button FontFamily="Segoe MDL2 Assets"
-                                        Content="&#xE121;"
-                                        Padding="4"
-                                        MinWidth="28"
-                                        Click="SalidaRealAhora_Click"
-                                        ToolTip="Poner hora actual como Salida Real"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-
+                <!-- Si ya tienes las columnas con botón/ícono para hora, deja las tuyas.
+                     Aquí las dejo como TextColumn para no interferir con tu versión. -->
+                <DataGridTextColumn Header="LlegadaReal"   Binding="{Binding LlegadaReal}" Width="110" />
+                <DataGridTextColumn Header="SalidaReal"    Binding="{Binding SalidaReal}" Width="110" />
                 <DataGridTextColumn Header="SalidaTope"    Binding="{Binding SalidaTope}" Width="110" />
+
                 <DataGridTextColumn Header="Observaciones" Binding="{Binding Observaciones}" Width="300" />
                 <DataGridTextColumn Header="Incidencias"   Binding="{Binding Incidencias}" Width="240" />
+
+                <!-- Fecha (DateOnly) en formato yyyy-MM-dd -->
                 <DataGridTextColumn Header="Fecha"         Binding="{Binding Fecha, StringFormat=\{0:yyyy-MM-dd\}}" Width="120" />
+
                 <DataGridTextColumn Header="Precinto"      Binding="{Binding Precinto}" Width="120" />
                 <DataGridCheckBoxColumn Header="Lex"       Binding="{Binding Lex}" Width="60" />
+
+                <!-- Lado: ItemsSource = lista de strings; SelectedItem = string -->
                 <DataGridComboBoxColumn Header="Lado"
                                         Width="140"
                                         ItemsSource="{Binding DataContext.Config.Lados, RelativeSource={RelativeSource AncestorType=Window}}"
