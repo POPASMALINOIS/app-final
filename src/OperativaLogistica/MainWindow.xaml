@@ -3,59 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
         Title="PLM INDITEX EXPEDICIÓN" Height="900" Width="1500">
-
-    <!-- ===== Recursos de ventana ===== -->
-    <Window.Resources>
-
-        <!-- Opciones del desplegable de Estado -->
-        <x:Array x:Key="EstadosOpciones" Type="{x:Type sys:String}">
-            <sys:String>Cargando</sys:String>
-            <sys:String>OK</sys:String>
-            <sys:String>Anulado</sys:String>
-        </x:Array>
-
-        <!-- Icono de reloj como Geometry -->
-        <!-- (simple, vectorial. Si quieres otro estilo, lo cambiamos) -->
-        <Geometry x:Key="IconClock">
-            F1 M 12,2 A 10,10 0 1 1 11.999,2 Z
-            M 11,6 L 13,6 13,12 18,12 18,14 11,14 Z
-        </Geometry>
-
-        <!-- Botón “icon-only” sin bordes -->
-        <Style x:Key="IconButton" TargetType="Button">
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="0"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Width" Value="22"/>
-            <Setter Property="Height" Value="22"/>
-            <Setter Property="Focusable" Value="False"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                CornerRadius="4">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#14000000"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#22000000"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-    </Window.Resources>
 
     <DockPanel>
 
@@ -83,7 +32,9 @@
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
                 <TextBlock Text="Fecha:" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <DatePicker SelectedDate="{Binding FechaActual, Mode=TwoWay}" Width="150" />
+
                 <TextBlock Text="   Lado:" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                <!-- AQUÍ: ItemsSource = Config.Lados, SelectedItem = LadoSeleccionado -->
                 <ComboBox Width="140"
                           ItemsSource="{Binding Config.Lados}"
                           SelectedItem="{Binding LadoSeleccionado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
@@ -108,88 +59,23 @@
                 <DataGridTextColumn Header="Transportista" Binding="{Binding Transportista}" Width="220" />
                 <DataGridTextColumn Header="Matricula"     Binding="{Binding Matricula}" Width="110" />
                 <DataGridTextColumn Header="Muelle"        Binding="{Binding Muelle}" Width="90" />
-
-                <!-- Estado: desplegable -->
-                <DataGridComboBoxColumn Header="Estado"
-                                        Width="110"
-                                        ItemsSource="{StaticResource EstadosOpciones}"
-                                        SelectedItemBinding="{Binding Estado, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                        IsReadOnly="False"/>
-
+                <DataGridTextColumn Header="Estado"        Binding="{Binding Estado}" Width="110" />
                 <DataGridTextColumn Header="Destino"       Binding="{Binding Destino}" Width="220" />
 
                 <DataGridTextColumn Header="Llegada"       Binding="{Binding Llegada}" Width="110" />
-
-                <!-- LlegadaReal con botón de reloj -->
-                <DataGridTemplateColumn Header="LlegadaReal" Width="120">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <DockPanel LastChildFill="False">
-                                <TextBlock Text="{Binding LlegadaReal}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <Button Style="{StaticResource IconButton}"
-                                        ToolTip="Marcar hora actual"
-                                        Click="SetLlegadaRealNow_Click">
-                                    <Path Data="{StaticResource IconClock}" Fill="DimGray" Stretch="Uniform"/>
-                                </Button>
-                            </DockPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                    <DataGridTemplateColumn.CellEditingTemplate>
-                        <DataTemplate>
-                            <DockPanel LastChildFill="False">
-                                <TextBox Text="{Binding LlegadaReal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <Button Style="{StaticResource IconButton}"
-                                        ToolTip="Marcar hora actual"
-                                        Click="SetLlegadaRealNow_Click">
-                                    <Path Data="{StaticResource IconClock}" Fill="DimGray" Stretch="Uniform"/>
-                                </Button>
-                            </DockPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellEditingTemplate>
-                </DataGridTemplateColumn>
-
-                <!-- SalidaReal con botón de reloj -->
-                <DataGridTemplateColumn Header="SalidaReal" Width="120">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <DockPanel LastChildFill="False">
-                                <TextBlock Text="{Binding SalidaReal}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <Button Style="{StaticResource IconButton}"
-                                        ToolTip="Marcar hora actual"
-                                        Click="SetSalidaRealNow_Click">
-                                    <Path Data="{StaticResource IconClock}" Fill="DimGray" Stretch="Uniform"/>
-                                </Button>
-                            </DockPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                    <DataGridTemplateColumn.CellEditingTemplate>
-                        <DataTemplate>
-                            <DockPanel LastChildFill="False">
-                                <TextBox Text="{Binding SalidaReal, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="70" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <Button Style="{StaticResource IconButton}"
-                                        ToolTip="Marcar hora actual"
-                                        Click="SetSalidaRealNow_Click">
-                                    <Path Data="{StaticResource IconClock}" Fill="DimGray" Stretch="Uniform"/>
-                                </Button>
-                            </DockPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellEditingTemplate>
-                </DataGridTemplateColumn>
-
+                <DataGridTextColumn Header="LlegadaReal"   Binding="{Binding LlegadaReal}" Width="110" />
+                <DataGridTextColumn Header="SalidaReal"    Binding="{Binding SalidaReal}" Width="110" />
                 <DataGridTextColumn Header="SalidaTope"    Binding="{Binding SalidaTope}" Width="110" />
 
                 <DataGridTextColumn Header="Observaciones" Binding="{Binding Observaciones}" Width="300" />
                 <DataGridTextColumn Header="Incidencias"   Binding="{Binding Incidencias}" Width="240" />
 
-                <!-- Fecha (DateOnly) en formato yyyy-MM-dd -->
                 <DataGridTextColumn Header="Fecha"         Binding="{Binding Fecha, StringFormat=\{0:yyyy-MM-dd\}}" Width="120" />
 
                 <DataGridTextColumn Header="Precinto"      Binding="{Binding Precinto}" Width="120" />
                 <DataGridCheckBoxColumn Header="Lex"       Binding="{Binding Lex}" Width="60" />
 
-                <!-- Lado: ItemsSource = lista de strings; SelectedItem = string -->
+                <!-- Lado: ahora funciona con strings directamente -->
                 <DataGridComboBoxColumn Header="Lado"
                                         Width="140"
                                         ItemsSource="{Binding DataContext.Config.Lados, RelativeSource={RelativeSource AncestorType=Window}}"
